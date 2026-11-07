@@ -1,0 +1,2396 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程文件PDF自動產出工具</title>
+    <!-- 引入 FontAwesome 圖示與 jsPDF（僅供匯出使用） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        /* 系統重設與字體定義 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --primary: #d97706;
+            --primary-hover: #b45309;
+            --primary-light: #fef3c7;
+            --border-color: #000000;
+            --sidebar-width: 400px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #334155;
+            color: #1e293b;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 頂部導覽列 */
+        .top-navbar {
+            background-color: #0f172a;
+            color: #ffffff;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        .navbar-brand {
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .navbar-brand i {
+            color: #f59e0b;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .tab-btn-group, .grid-btn-group {
+            display: flex;
+            background-color: #1e293b;
+            border-radius: 6px;
+            padding: 3px;
+            border: 1px solid #334155;
+        }
+
+        .tab-btn, .grid-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tab-btn.active, .grid-btn.active {
+            background-color: #f59e0b;
+            color: #0f172a;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .action-btns {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-export {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: white;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+            transition: all 0.15s;
+        }
+
+        .btn-export:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-print {
+            background-color: #475569;
+            color: white;
+            border: none;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-print:hover {
+            background-color: #64748b;
+        }
+
+        /* 預覽控制浮動列 (縮放/整頁適配) */
+        .preview-toolbar {
+            position: absolute;
+            top: 14px;
+            right: 24px;
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(8px);
+            border: 1px solid #334155;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+        }
+
+        .zoom-btn {
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+
+        .zoom-btn:hover {
+            background: #334155;
+            color: #ffffff;
+        }
+
+        .zoom-btn.active {
+            background: #f59e0b;
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .zoom-indicator {
+            color: #f1f5f9;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 44px;
+            text-align: center;
+        }
+
+        /* 主容器佈局 */
+        .main-container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 左側操作面板 */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: #ffffff;
+            border-right: 1px solid #e2e8f0;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            flex-shrink: 0;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+        }
+
+        .section-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .section-header {
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* 施工日誌天數控制 */
+        .days-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .day-tab-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .day-tab-btn.active {
+            background-color: #f59e0b;
+            color: #ffffff;
+            border-color: #d97706;
+        }
+
+        .day-actions-bar {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-add-day {
+            background-color: #e0e7ff;
+            color: #3730a3;
+            border-color: #c7d2fe;
+        }
+
+        .btn-copy-day {
+            background-color: #fef3c7;
+            color: #92400e;
+            border-color: #fde68a;
+        }
+
+        .btn-del-day {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border-color: #fecaca;
+        }
+
+        /* 表頭欄位清單 */
+        .field-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .field-item {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field-top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .field-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+            cursor: pointer;
+        }
+
+        .input-text {
+            width: 100%;
+            padding: 5px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #1e293b;
+        }
+
+        .input-text:focus {
+            outline: none;
+            border-color: #f59e0b;
+        }
+
+        /* 下拉選單組件 */
+        .date-select-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .select-date {
+            padding: 4px 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 12px;
+            background-color: #ffffff;
+            color: #1e293b;
+        }
+
+        .date-range-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .badge-start {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-end {
+            background-color: #e0f2fe;
+            color: #0369a1;
+        }
+
+        /* 照片上傳拖放區 */
+        .dropzone-box {
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            background-color: #ffffff;
+            padding: 18px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .dropzone-box:hover, .dropzone-box.dragover {
+            border-color: #f59e0b;
+            background-color: #fffbeb;
+        }
+
+        .dropzone-icon {
+            font-size: 24px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .dropzone-text {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .dropzone-hint {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        /* 常用詞彙清單 */
+        .tags-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            max-height: 130px;
+            overflow-y: auto;
+            padding: 2px;
+        }
+
+        .word-tag {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #334155;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s;
+        }
+
+        .word-tag:hover {
+            border-color: #f59e0b;
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .tag-del-btn {
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0 2px;
+            font-size: 12px;
+            border-radius: 50%;
+        }
+
+        .tag-del-btn:hover {
+            color: #ef4444;
+        }
+
+        .add-tag-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        /* 右側 1:1 A4 紙張預覽區 */
+        .preview-pane {
+            flex: 1;
+            background-color: #475569;
+            overflow: auto;
+            position: relative;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        /* 縮放外層包裝容器 */
+        .preview-pages-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            transform-origin: top center;
+            transition: transform 0.18s ease-out;
+        }
+
+        /* 標準 A4 紙張比例卡片 (210mm x 297mm) */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            height: 297mm;
+            background-color: #ffffff;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            padding: 12mm 15mm;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            position: relative;
+            flex-shrink: 0;
+            /* 全面強制標楷體 */
+            font-family: "標楷體", "DFKai-SB", "BiauKai", "TW-Kai", serif;
+            color: #000000;
+        }
+
+        /* A4 紙張內的工程表格 (黑線 1px) */
+        .eng-doc-title {
+            text-align: center;
+            font-size: 24pt;
+            font-weight: 700;
+            margin-bottom: 6px;
+            letter-spacing: 2px;
+        }
+
+        .eng-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #000000;
+            table-layout: fixed;
+            margin-bottom: 6px;
+        }
+
+        .eng-table th, .eng-table td {
+            border: 1px solid #000000;
+            padding: 0 4px;
+            height: 26px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 11pt;
+            word-break: break-all;
+            position: relative;
+        }
+
+        .eng-table th {
+            background-color: #ffffff;
+            font-weight: 700;
+        }
+
+        .eng-table td.text-left {
+            text-align: left;
+            padding-left: 8px;
+        }
+
+        /* 儲存格文字幾何垂直置中輔助容器 */
+        .cell-content-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 26px;
+            width: 100%;
+            line-height: 1.25;
+        }
+
+        .cell-content-left {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 26px;
+            width: 100%;
+            padding-left: 4px;
+            line-height: 1.25;
+        }
+
+        /* 施工項目專用表頭 */
+        .work-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #000000;
+            border-top: none;
+            table-layout: fixed;
+            margin-bottom: 6px;
+        }
+
+        .work-items-table th, .work-items-table td {
+            border: 1px solid #000000;
+            padding: 0 3px;
+            height: 24px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 10pt;
+            word-break: break-all;
+        }
+
+        /* 照片橫幅列 */
+        .photo-banner {
+            border: 1.5px solid #000000;
+            border-bottom: 1px solid #000000;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 11.5pt;
+            font-weight: 700;
+            background-color: #ffffff;
+            flex-shrink: 0;
+        }
+
+        /* 照片九宮格 / 六宮格容器 */
+        .photo-grid-container {
+            flex: 1;
+            display: grid;
+            border-left: 1.5px solid #000000;
+            border-right: 1.5px solid #000000;
+            border-bottom: 1.5px solid #000000;
+            overflow: hidden;
+        }
+
+        .grid-3x2 {
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+
+        .grid-3x3 {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+
+        .photo-cell {
+            border-right: 1px solid #000000;
+            border-bottom: 1px solid #000000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            background-color: #ffffff;
+        }
+
+        /* 邊界格子外框維持 1.5px */
+        .grid-3x2 .photo-cell:nth-child(2n) {
+            border-right: none;
+        }
+        .grid-3x2 .photo-cell:nth-child(n+5) {
+            border-bottom: none;
+        }
+
+        .grid-3x3 .photo-cell:nth-child(3n) {
+            border-right: none;
+        }
+        .grid-3x3 .photo-cell:nth-child(n+7) {
+            border-bottom: none;
+        }
+
+        .photo-img-wrap {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ffffff;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+
+        /* 拖曳排序樣式 */
+        .photo-cell.dragging {
+            opacity: 0.45;
+            outline: 2px dashed #f59e0b;
+        }
+
+        .photo-cell.drag-hover {
+            background-color: #fffbeb !important;
+            box-shadow: inset 0 0 0 2.5px #f59e0b;
+        }
+
+        .drag-handle-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(15, 23, 42, 0.75);
+            color: #ffffff;
+            font-size: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            opacity: 0;
+            transition: opacity 0.15s;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .photo-cell:hover .drag-handle-badge {
+            opacity: 1;
+        }
+
+        .photo-img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            /* 嚴格保持原始長寬比，絕不拉伸 */
+            object-fit: contain;
+            display: block;
+            pointer-events: none; /* 避免原生圖片拖拉干擾格子自訂拖曳 */
+        }
+
+        /* 預覽模式下的空白格提示（匯出時不印） */
+        .empty-slot-hint {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-family: -apple-system, sans-serif;
+            font-size: 11px;
+            gap: 4px;
+            user-select: none;
+            width: 100%;
+            height: 100%;
+            border: 1px dashed #cbd5e1;
+            margin: 4px;
+            border-radius: 4px;
+            background-color: #f8fafc;
+        }
+
+        .empty-slot-hint i {
+            font-size: 16px;
+        }
+
+        /* 照片下方說明列 */
+        .photo-caption-bar {
+            height: 24px;
+            border-top: 1px solid #000000;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            background-color: #ffffff;
+            flex-shrink: 0;
+        }
+
+        .photo-caption-input {
+            width: 100%;
+            border: none;
+            font-family: "標楷體", "DFKai-SB", "BiauKai", "TW-Kai", serif;
+            font-size: 10.5pt;
+            color: #000000;
+            background: transparent;
+            text-align: left;
+            padding: 0 2px;
+            line-height: 1.2;
+        }
+
+        .photo-caption-input:focus {
+            outline: 1px dashed #f59e0b;
+            background-color: #fffbeb;
+        }
+
+        /* 印表機專用列印樣式 */
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            .top-navbar, .sidebar {
+                display: none !important;
+            }
+            .preview-pane {
+                padding: 0 !important;
+                background: white !important;
+            }
+            .a4-page {
+                box-shadow: none !important;
+                margin: 0 !important;
+                page-break-after: always;
+            }
+            .empty-slot-hint {
+                display: none !important;
+            }
+        }
+
+        /* 隱藏原生檔案選擇器 */
+        .hidden-file-input {
+            display: none;
+        }
+
+        /* 轉檔中提示遮罩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(15, 23, 42, 0.7);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #f59e0b;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 頂部功能導覽列 -->
+    <header class="top-navbar">
+        <div class="navbar-brand">
+            <i class="fa-solid fa-file-contract"></i>
+            <span>工程文件 PDF 自動產出工具</span>
+        </div>
+
+        <div class="nav-controls">
+            <!-- 模組切換 -->
+            <div class="tab-btn-group">
+                <button type="button" class="tab-btn active" id="btn-mod-daily" onclick="switchModule('daily')">
+                    <i class="fa-regular fa-calendar-days"></i> 施工日誌
+                </button>
+                <button type="button" class="tab-btn" id="btn-mod-accept" onclick="switchModule('accept')">
+                    <i class="fa-solid fa-clipboard-check"></i> 工程驗收報告
+                </button>
+            </div>
+
+            <!-- 照片格數切換 -->
+            <div class="grid-btn-group">
+                <button type="button" class="grid-btn active" id="btn-grid-6" onclick="setGridMode('3x2')">
+                    3×2 (每頁6張)
+                </button>
+                <button type="button" class="grid-btn" id="btn-grid-9" onclick="setGridMode('3x3')">
+                    3×3 (每頁9張)
+                </button>
+            </div>
+
+            <!-- 匯出與列印動作 -->
+            <div class="action-btns">
+                <button type="button" class="btn-export" onclick="exportToPdfCanvas()">
+                    <i class="fa-solid fa-file-arrow-down"></i> 直接下載 PDF
+                </button>
+                <button type="button" class="btn-print" onclick="window.print()">
+                    <i class="fa-solid fa-print"></i> 列印 / 另存
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主工作區域 -->
+    <main class="main-container">
+        <!-- 左側操作與編輯面板 -->
+        <aside class="sidebar">
+            <!-- (A) 施工日誌專屬：多天數分頁列 -->
+            <div class="section-box" id="sec-days-box">
+                <div class="section-header">
+                    <span><i class="fa-solid fa-calendar-week"></i> 施工天數管理</span>
+                </div>
+                <div class="days-nav" id="days-nav-container"></div>
+                <div class="day-actions-bar">
+                    <button type="button" class="btn-sm btn-add-day" onclick="addNewDay()">
+                        <i class="fa-solid fa-plus"></i> 新增天數
+                    </button>
+                    <button type="button" class="btn-sm btn-copy-day" onclick="duplicateCurrentDay()">
+                        <i class="fa-regular fa-copy"></i> 複製此日資料
+                    </button>
+                    <button type="button" class="btn-sm btn-del-day" id="btn-del-current-day" onclick="deleteCurrentDay()">
+                        <i class="fa-regular fa-trash-can"></i> 刪除此日
+                    </button>
+                </div>
+            </div>
+
+            <!-- (B) 表頭欄位自訂與勾選 -->
+            <div class="section-box">
+                <div class="section-header">
+                    <span><i class="fa-solid fa-list-check"></i> 表頭項目勾選與設定</span>
+                    <button type="button" class="btn-sm btn-add-day" onclick="openAddCustomFieldPrompt()">
+                        <i class="fa-solid fa-plus"></i> 自訂欄位
+                    </button>
+                </div>
+                <div class="field-list" id="fields-control-container"></div>
+            </div>
+
+            <!-- (C) 批量照片拖放上傳區 -->
+            <div class="section-box">
+                <div class="section-header">
+                    <span><i class="fa-solid fa-images"></i> 批量照片上傳</span>
+                    <button type="button" class="btn-sm btn-del-day" onclick="clearCurrentPhotos()">
+                        <i class="fa-solid fa-eraser"></i> 清空照片
+                    </button>
+                </div>
+                <div class="dropzone-box" id="batch-dropzone" onclick="triggerBatchUpload()">
+                    <i class="fa-solid fa-cloud-arrow-up dropzone-icon"></i>
+                    <div class="dropzone-text">點擊選取或拖曳多張照片至此</div>
+                    <div class="dropzone-hint">支援批次多檔拖放・自動依序填入格子</div>
+                </div>
+                <input type="file" id="batch-file-input" class="hidden-file-input" multiple accept="image/*" onchange="handleBatchFileSelect(event)">
+            </div>
+
+            <!-- 常用詞彙清單 -->
+            <div class="section-box">
+                <div class="section-header">
+                    <span><i class="fa-solid fa-tags"></i> 常用說明詞彙庫</span>
+                    <span style="font-size:11px; color:#64748b;">點擊代入最後焦點</span>
+                </div>
+                <div class="add-tag-row">
+                    <input type="text" id="new-tag-input" class="input-text" placeholder="輸入常用詞 (例如: 施工完成)" onkeydown="if(event.key==='Enter') addNewTag()">
+                    <button type="button" class="btn-sm btn-add-day" onclick="addNewTag()">新增</button>
+                </div>
+                <div class="tags-wrapper" id="tags-container"></div>
+            </div>
+        </aside>
+
+        <!-- 右側預覽區 (含浮動縮放工具列與適配視窗包裝容器) -->
+        <section class="preview-pane" id="preview-scroll-container">
+            <div class="preview-toolbar" id="preview-toolbar">
+                <button type="button" class="zoom-btn active" id="btn-fit-page" onclick="setZoomMode('fitPage')" title="整頁適配視窗">
+                    <i class="fa-solid fa-expand"></i> 整頁適配
+                </button>
+                <button type="button" class="zoom-btn" id="btn-fit-width" onclick="setZoomMode('fitWidth')" title="適配寬度">
+                    <i class="fa-solid fa-arrows-left-right"></i> 寬度適配
+                </button>
+                <button type="button" class="zoom-btn" id="btn-zoom-100" onclick="setZoomMode('100')" title="原始比例 (100%)">
+                    100%
+                </button>
+                <span style="width:1px; height:14px; background:#475569;"></span>
+                <button type="button" class="zoom-btn" onclick="adjustZoom(-0.05)" title="縮小">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+                <span class="zoom-indicator" id="zoom-text">75%</span>
+                <button type="button" class="zoom-btn" onclick="adjustZoom(0.05)" title="放大">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+            <div class="preview-pages-wrapper" id="preview-pages-wrapper">
+                <!-- A4 紙張將由 JavaScript 動態生成渲染在此 -->
+            </div>
+        </section>
+    </main>
+
+    <!-- 單獨格位圖片選擇器 (隱藏) -->
+    <input type="file" id="single-file-input" class="hidden-file-input" accept="image/*" onchange="handleSingleFileSelect(event)">
+
+    <!-- 轉檔進度遮罩 -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <div style="font-size: 16px; font-weight: bold;" id="loading-text">正在生成高解析度 PDF...</div>
+    </div>
+
+    <!-- 應用程式核心邏輯腳本 -->
+    <script>
+        /**
+         * 全域資料模型與預設資料
+         */
+        let currentModule = 'daily'; // 'daily' (施工日誌) 或 'accept' (工程驗收報告)
+        let currentGridMode = '3x2'; // '3x2' (6格) 或 '3x3' (9格)
+        let activeDailyDayIndex = 0;
+        let lastFocusedCaptionIndex = null;
+        let pendingUploadSlotIndex = null;
+        let draggedPhotoIndex = null; // 紀錄目前正在拖曳排序的照片索引
+
+        // 縮放狀態控制：預設為 'fitPage' (整頁適配)
+        let zoomMode = 'fitPage'; // 'fitPage' | 'fitWidth' | 'custom'
+        let currentScale = 1.0;
+
+        // 常用詞彙清單
+        let quickTags = [
+            '電線遭破壞', '修復前', '施工中', '修繕完成',
+            '管路開挖', '配管配線', '管路回填', '送電量測',
+            '圍籬修復', '保全/監視器復原', '電性量測OK', '配線完成'
+        ];
+
+        // 施工日誌天數資料集 (參考範例)
+        let dailyDaysData = [
+            {
+                dateObj: { year: '2025', month: '10', day: '7', format: 'zh' },
+                siteName: '陳秀娟(失竊修復工程)',
+                siteAddress: '屏東縣新園鄉新南段75地號(22.515890, 120.456980)',
+                customFields: [],
+                workItems: [
+                    { item: '管路開挖/回填', workers: '4', tool: '手工具', duration: '4hr', material: '五金耗材', qty: '一式' },
+                    { item: '配管配線', workers: '4', tool: '手工具', duration: '4hr', material: 'XLPE電纜/接地線', qty: '150+15(米)' }
+                ],
+                photos: [
+                    { src: '', caption: '說明:管路開挖' },
+                    { src: '', caption: '說明:配管配線' },
+                    { src: '', caption: '說明:管路回填' },
+                    { src: '', caption: '說明:管路回填' },
+                    { src: '', caption: '說明:配管配線' },
+                    { src: '', caption: '說明:配管配線' }
+                ]
+            },
+            {
+                dateObj: { year: '2025', month: '10', day: '8', format: 'zh' },
+                siteName: '陳秀娟(失竊修復工程)',
+                siteAddress: '屏東縣新園鄉新南段75地號(22.515890, 120.456980)',
+                customFields: [],
+                workItems: [
+                    { item: '配線(續)', workers: '4', tool: '手工具', duration: '4hr', material: '五金耗材', qty: '一式' },
+                    { item: '送電量測', workers: '4', tool: '電表', duration: '1hr', material: 'NA', qty: 'NA' },
+                    { item: '圍籬修復', workers: '4', tool: '手工具', duration: '1hr', material: '五金耗材', qty: '一式' },
+                    { item: '保全/監視器復原', workers: '4', tool: '手工具', duration: '2hr', material: '五金耗材', qty: '一式' }
+                ],
+                photos: [
+                    { src: '', caption: '說明:配線(續)' },
+                    { src: '', caption: '說明:配線(續)' },
+                    { src: '', caption: '說明:配線完成' },
+                    { src: '', caption: '說明:電性量測OK' },
+                    { src: '', caption: '說明:圍籬復原。' },
+                    { src: '', caption: '說明:監控攝影機畫面。' }
+                ]
+            }
+        ];
+
+        // 工程驗收報告資料集 (參考 工程驗收報告範例.pdf)
+        let acceptanceData = {
+            docTitle: '電線遭竊破壞緊急修繕工程',
+            contractor: '54902391-新綠能源',
+            acceptDate: { year: '2026', month: '5', day: '25', format: 'slash' },
+            siteCapacity: '上烏龍段608(498-4003)/93.39kW',
+            periodDate: {
+                startYear: '2026', startMonth: '5', startDay: '24',
+                endYear: '2026', endMonth: '5', endDay: '25',
+                format: 'slash'
+            },
+            remarks: '',
+            customFields: [],
+            // 欄位勾選狀態控制
+            checks: {
+                docTitle: true,
+                contractor: true,
+                acceptDate: true,
+                siteCapacity: true,
+                periodDate: true,
+                remarks: true
+            },
+            photos: [
+                { src: '', caption: '電線遭破壞' },
+                { src: '', caption: '修復前' },
+                { src: '', caption: '施工中' },
+                { src: '', caption: '施工中' },
+                { src: '', caption: '修繕完成' },
+                { src: '', caption: '修繕完成' }
+            ]
+        };
+
+        /**
+         * 系統初始化與事件綁定
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            initSamplePhotos();
+            setupBatchDropzone();
+            renderAll();
+            
+            // 監聽視窗尺寸改變，自動重新計算整頁適配縮放比例
+            window.addEventListener('resize', () => {
+                if (zoomMode === 'fitPage' || zoomMode === 'fitWidth') {
+                    applyCurrentScale();
+                }
+            });
+        });
+
+        // 載入初始範例圖（使用 Canvas 繪製彩色方塊，避免外部圖片破圖）
+        function initSamplePhotos() {
+            const createSampleCanvasUrl = (text, bg) => {
+                const c = document.createElement('canvas');
+                c.width = 600;
+                c.height = 450;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, 600, 450);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 8;
+                ctx.strokeRect(15, 15, 570, 420);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 36px "標楷體", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, 300, 225);
+                return c.toDataURL('image/png');
+            };
+
+            const colors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#4b5563'];
+
+            // 為施工日誌產生示意照
+            dailyDaysData.forEach((day, dIdx) => {
+                day.photos.forEach((p, pIdx) => {
+                    p.src = createSampleCanvasUrl(`施工日誌 D${dIdx+1} - 照片 ${pIdx+1}`, colors[pIdx % colors.length]);
+                });
+            });
+
+            // 為工程驗收報告產生示意照
+            acceptanceData.photos.forEach((p, pIdx) => {
+                p.src = createSampleCanvasUrl(`驗收報告 - 照片 ${pIdx+1}`, colors[pIdx % colors.length]);
+            });
+        }
+
+        /**
+         * 模組與排版模式切換
+         */
+        function switchModule(mod) {
+            currentModule = mod;
+            document.getElementById('btn-mod-daily').classList.toggle('active', mod === 'daily');
+            document.getElementById('btn-mod-accept').classList.toggle('active', mod === 'accept');
+            document.getElementById('sec-days-box').style.display = (mod === 'daily') ? 'block' : 'none';
+            renderAll();
+        }
+
+        function setGridMode(mode) {
+            currentGridMode = mode;
+            document.getElementById('btn-grid-6').classList.toggle('active', mode === '3x2');
+            document.getElementById('btn-grid-9').classList.toggle('active', mode === '3x3');
+            renderPreviewPages();
+        }
+
+        /**
+         * 總渲染調度入口
+         */
+        function renderAll() {
+            renderSidebar();
+            renderPreviewPages();
+            renderTags();
+        }
+
+        /**
+         * 渲染左側控制面板
+         */
+        function renderSidebar() {
+            // 1. 施工日誌天數控制
+            const daysContainer = document.getElementById('days-nav-container');
+            daysContainer.innerHTML = '';
+            if (currentModule === 'daily') {
+                dailyDaysData.forEach((day, idx) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = `day-tab-btn ${idx === activeDailyDayIndex ? 'active' : ''}`;
+                    btn.innerHTML = `<i class="fa-regular fa-calendar"></i> 第 ${idx + 1} 天 (${day.dateObj.month}/${day.dateObj.day})`;
+                    btn.onclick = () => {
+                        activeDailyDayIndex = idx;
+                        renderAll();
+                    };
+                    daysContainer.appendChild(btn);
+                });
+                document.getElementById('btn-del-current-day').style.display = dailyDaysData.length > 1 ? 'inline-flex' : 'none';
+            }
+
+            // 2. 表頭項目表單
+            const fieldsContainer = document.getElementById('fields-control-container');
+            fieldsContainer.innerHTML = '';
+
+            if (currentModule === 'daily') {
+                const curDay = dailyDaysData[activeDailyDayIndex];
+                // (a) 案場名稱
+                fieldsContainer.appendChild(createSimpleTextField('案場名稱', curDay.siteName, (val) => {
+                    curDay.siteName = val;
+                    renderPreviewPages();
+                }));
+                // (b) 施工日期 (年月日選單)
+                fieldsContainer.appendChild(createDateSelectField('施工日期', curDay.dateObj, () => {
+                    renderSidebar();
+                    renderPreviewPages();
+                }));
+                // (c) 案場地址
+                fieldsContainer.appendChild(createSimpleTextField('案場地址', curDay.siteAddress, (val) => {
+                    curDay.siteAddress = val;
+                    renderPreviewPages();
+                }));
+            } else {
+                // 工程驗收報告
+                // (a) 大標題
+                fieldsContainer.appendChild(createCheckableTextField('文件標題', acceptanceData.docTitle, acceptanceData.checks.docTitle,
+                    (checked) => { acceptanceData.checks.docTitle = checked; renderPreviewPages(); },
+                    (val) => { acceptanceData.docTitle = val; renderPreviewPages(); }
+                ));
+                // (b) 維運/施工廠商
+                fieldsContainer.appendChild(createCheckableTextField('維運/施工廠商', acceptanceData.contractor, acceptanceData.checks.contractor,
+                    (checked) => { acceptanceData.checks.contractor = checked; renderPreviewPages(); },
+                    (val) => { acceptanceData.contractor = val; renderPreviewPages(); }
+                ));
+                // (c) 驗收日
+                fieldsContainer.appendChild(createCheckableDateField('驗收日', acceptanceData.acceptDate, acceptanceData.checks.acceptDate,
+                    (checked) => { acceptanceData.checks.acceptDate = checked; renderPreviewPages(); },
+                    () => { renderPreviewPages(); }
+                ));
+                // (d) 案場/容量
+                fieldsContainer.appendChild(createCheckableTextField('案場/容量', acceptanceData.siteCapacity, acceptanceData.checks.siteCapacity,
+                    (checked) => { acceptanceData.checks.siteCapacity = checked; renderPreviewPages(); },
+                    (val) => { acceptanceData.siteCapacity = val; renderPreviewPages(); }
+                ));
+                // (e) 起訖日 (雙日期起~訖)
+                fieldsContainer.appendChild(createDateRangeField('起訖日', acceptanceData.periodDate, acceptanceData.checks.periodDate,
+                    (checked) => { acceptanceData.checks.periodDate = checked; renderPreviewPages(); },
+                    () => { renderPreviewPages(); }
+                ));
+                // (f) 備註
+                fieldsContainer.appendChild(createCheckableTextField('備註', acceptanceData.remarks, acceptanceData.checks.remarks,
+                    (checked) => { acceptanceData.checks.remarks = checked; renderPreviewPages(); },
+                    (val) => { acceptanceData.remarks = val; renderPreviewPages(); }
+                ));
+            }
+
+            // 渲染自訂欄位
+            const customList = currentModule === 'daily' ? dailyDaysData[activeDailyDayIndex].customFields : acceptanceData.customFields;
+            customList.forEach((cField, cIdx) => {
+                const item = document.createElement('div');
+                item.className = 'field-item';
+                item.innerHTML = `
+                    <div class="field-top-row">
+                        <label class="field-checkbox-label">
+                            <input type="checkbox" ${cField.checked ? 'checked' : ''}>
+                            <span>${escapeHtml(cField.label)} (自訂)</span>
+                        </label>
+                        <i class="fa-solid fa-trash-can tag-del-btn" title="刪除此欄位"></i>
+                    </div>
+                    <input type="text" class="input-text" value="${escapeHtml(cField.value || '')}">
+                `;
+                item.querySelector('input[type="checkbox"]').onchange = (e) => {
+                    cField.checked = e.target.checked;
+                    renderPreviewPages();
+                };
+                item.querySelector('.tag-del-btn').onclick = () => {
+                    customList.splice(cIdx, 1);
+                    renderAll();
+                };
+                item.querySelector('.input-text').oninput = (e) => {
+                    cField.value = e.target.value;
+                    renderPreviewPages();
+                };
+                fieldsContainer.appendChild(item);
+            });
+        }
+
+        /**
+         * 表頭欄位 DOM 產生器
+         */
+        function createSimpleTextField(label, value, onInput) {
+            const wrap = document.createElement('div');
+            wrap.className = 'field-item';
+            wrap.innerHTML = `
+                <div class="field-top-row">
+                    <span style="font-size:12px; font-weight:700; color:#334155;">${label}</span>
+                </div>
+                <input type="text" class="input-text" value="${escapeHtml(value)}">
+            `;
+            wrap.querySelector('input').oninput = (e) => onInput(e.target.value);
+            return wrap;
+        }
+
+        function createCheckableTextField(label, value, checked, onCheck, onInput) {
+            const wrap = document.createElement('div');
+            wrap.className = 'field-item';
+            wrap.innerHTML = `
+                <div class="field-top-row">
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" ${checked ? 'checked' : ''}>
+                        <span>${label}</span>
+                    </label>
+                </div>
+                <input type="text" class="input-text" value="${escapeHtml(value)}">
+            `;
+            wrap.querySelector('input[type="checkbox"]').onchange = (e) => onCheck(e.target.checked);
+            wrap.querySelector('.input-text').oninput = (e) => onInput(e.target.value);
+            return wrap;
+        }
+
+        function createDateSelectField(label, dateObj, onChange) {
+            const wrap = document.createElement('div');
+            wrap.className = 'field-item';
+            wrap.innerHTML = `
+                <div class="field-top-row">
+                    <span style="font-size:12px; font-weight:700; color:#334155;">${label}</span>
+                    <select class="select-date format-sel" style="font-size:11px;">
+                        <option value="zh" ${dateObj.format === 'zh' ? 'selected' : ''}>年月日格式</option>
+                        <option value="slash" ${dateObj.format === 'slash' ? 'selected' : ''}>斜線格式 (/)</option>
+                    </select>
+                </div>
+                <div class="date-select-group">
+                    <select class="select-date year-sel"></select>
+                    <select class="select-date month-sel"></select>
+                    <select class="select-date day-sel"></select>
+                </div>
+            `;
+            fillDateSelectors(wrap, dateObj, onChange);
+            wrap.querySelector('.format-sel').onchange = (e) => {
+                dateObj.format = e.target.value;
+                onChange();
+            };
+            return wrap;
+        }
+
+        function createCheckableDateField(label, dateObj, checked, onCheck, onChange) {
+            const wrap = document.createElement('div');
+            wrap.className = 'field-item';
+            wrap.innerHTML = `
+                <div class="field-top-row">
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" ${checked ? 'checked' : ''}>
+                        <span>${label}</span>
+                    </label>
+                    <select class="select-date format-sel" style="font-size:11px;">
+                        <option value="slash" ${dateObj.format === 'slash' ? 'selected' : ''}>斜線格式 (/)</option>
+                        <option value="zh" ${dateObj.format === 'zh' ? 'selected' : ''}>年月日格式</option>
+                    </select>
+                </div>
+                <div class="date-select-group">
+                    <select class="select-date year-sel"></select>
+                    <select class="select-date month-sel"></select>
+                    <select class="select-date day-sel"></select>
+                </div>
+            `;
+            wrap.querySelector('input[type="checkbox"]').onchange = (e) => onCheck(e.target.checked);
+            fillDateSelectors(wrap, dateObj, onChange);
+            wrap.querySelector('.format-sel').onchange = (e) => {
+                dateObj.format = e.target.value;
+                onChange();
+            };
+            return wrap;
+        }
+
+        function createDateRangeField(label, pDate, checked, onCheck, onChange) {
+            const wrap = document.createElement('div');
+            wrap.className = 'field-item';
+            wrap.innerHTML = `
+                <div class="field-top-row">
+                    <label class="field-checkbox-label">
+                        <input type="checkbox" ${checked ? 'checked' : ''}>
+                        <span>${label} (起訖日)</span>
+                    </label>
+                    <select class="select-date format-sel" style="font-size:11px;">
+                        <option value="slash" ${pDate.format === 'slash' ? 'selected' : ''}>斜線 (/)</option>
+                        <option value="zh" ${pDate.format === 'zh' ? 'selected' : ''}>年月日</option>
+                    </select>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-top:2px;">
+                    <div class="date-select-group">
+                        <span class="date-range-badge badge-start">起</span>
+                        <select class="select-date s-year"></select>
+                        <select class="select-date s-month"></select>
+                        <select class="select-date s-day"></select>
+                    </div>
+                    <div class="date-select-group">
+                        <span class="date-range-badge badge-end">訖</span>
+                        <select class="select-date e-year"></select>
+                        <select class="select-date e-month"></select>
+                        <select class="select-date e-day"></select>
+                    </div>
+                </div>
+            `;
+            wrap.querySelector('input[type="checkbox"]').onchange = (e) => onCheck(e.target.checked);
+            wrap.querySelector('.format-sel').onchange = (e) => {
+                pDate.format = e.target.value;
+                onChange();
+            };
+
+            // 填充起日
+            fillOptions(wrap.querySelector('.s-year'), getYearOptions(), pDate.startYear);
+            fillOptions(wrap.querySelector('.s-month'), getMonthOptions(), pDate.startMonth);
+            fillOptions(wrap.querySelector('.s-day'), getDayOptions(), pDate.startDay);
+            wrap.querySelector('.s-year').onchange = (e) => { pDate.startYear = e.target.value; onChange(); };
+            wrap.querySelector('.s-month').onchange = (e) => { pDate.startMonth = e.target.value; onChange(); };
+            wrap.querySelector('.s-day').onchange = (e) => { pDate.startDay = e.target.value; onChange(); };
+
+            // 填充訖日
+            fillOptions(wrap.querySelector('.e-year'), getYearOptions(), pDate.endYear);
+            fillOptions(wrap.querySelector('.e-month'), getMonthOptions(), pDate.endMonth);
+            fillOptions(wrap.querySelector('.e-day'), getDayOptions(), pDate.endDay);
+            wrap.querySelector('.e-year').onchange = (e) => { pDate.endYear = e.target.value; onChange(); };
+            wrap.querySelector('.e-month').onchange = (e) => { pDate.endMonth = e.target.value; onChange(); };
+            wrap.querySelector('.e-day').onchange = (e) => { pDate.endDay = e.target.value; onChange(); };
+
+            return wrap;
+        }
+
+        function fillDateSelectors(container, dateObj, onChange) {
+            const ySel = container.querySelector('.year-sel');
+            const mSel = container.querySelector('.month-sel');
+            const dSel = container.querySelector('.day-sel');
+
+            fillOptions(ySel, getYearOptions(), dateObj.year);
+            fillOptions(mSel, getMonthOptions(), dateObj.month);
+            fillOptions(dSel, getDayOptions(), dateObj.day);
+
+            ySel.onchange = (e) => { dateObj.year = e.target.value; onChange(); };
+            mSel.onchange = (e) => { dateObj.month = e.target.value; onChange(); };
+            dSel.onchange = (e) => { dateObj.day = e.target.value; onChange(); };
+        }
+
+        function fillOptions(selectElem, items, selectedValue) {
+            selectElem.innerHTML = '';
+            items.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.val;
+                opt.textContent = item.txt;
+                if (String(item.val) === String(selectedValue)) opt.selected = true;
+                selectElem.appendChild(opt);
+            });
+        }
+
+        function getYearOptions() {
+            const list = [];
+            for (let y = 2024; y <= 2032; y++) list.push({ val: String(y), txt: `${y}年` });
+            return list;
+        }
+
+        function getMonthOptions() {
+            const list = [];
+            for (let m = 1; m <= 12; m++) list.push({ val: String(m), txt: `${m}月` });
+            return list;
+        }
+
+        function getDayOptions() {
+            const list = [];
+            for (let d = 1; d <= 31; d++) list.push({ val: String(d), txt: `${d}日` });
+            return list;
+        }
+
+        /**
+         * 格式化日期字串
+         */
+        function formatDateText(dObj) {
+            if (!dObj) return '';
+            if (dObj.format === 'slash') {
+                return `${dObj.year}/${dObj.month}/${dObj.day}`;
+            }
+            return `${dObj.year}年${dObj.month}月${dObj.day}日`;
+        }
+
+        function formatDateRangeText(pObj) {
+            if (!pObj) return '';
+            if (pObj.format === 'slash') {
+                return `${pObj.startYear}/${pObj.startMonth}/${pObj.startDay} ~ ${pObj.endYear}/${pObj.endMonth}/${pObj.endDay}`;
+            }
+            return `${pObj.startYear}年${pObj.startMonth}月${pObj.startDay}日 ~ ${pObj.endYear}年${pObj.endMonth}月${pObj.endDay}日`;
+        }
+
+        /**
+         * 右側 A4 即時預覽渲染
+         */
+        function renderPreviewPages() {
+            const wrapper = document.getElementById('preview-pages-wrapper');
+            wrapper.innerHTML = '';
+
+            const perPage = currentGridMode === '3x2' ? 6 : 9;
+
+            if (currentModule === 'daily') {
+                // 施工日誌：依目前選定之「天」進行分頁
+                const curDay = dailyDaysData[activeDailyDayIndex];
+                const photos = curDay.photos;
+                const totalPages = Math.max(1, Math.ceil(photos.length / perPage));
+
+                for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+                    const pageElem = document.createElement('div');
+                    pageElem.className = 'a4-page';
+
+                    // 每日第一頁顯示表頭與工項明細
+                    if (pageIdx === 0) {
+                        pageElem.innerHTML += buildDailyHeaderHtml(curDay);
+                        pageElem.innerHTML += buildDailyWorkItemsHtml(curDay.workItems);
+                    }
+
+                    // 照片橫幅列（不顯示「自動維持長寬比」或格數字樣）
+                    pageElem.innerHTML += `
+                        <div class="photo-banner">
+                            施工照片暨說明：
+                        </div>
+                    `;
+
+                    // 照片格線容器
+                    const gridWrap = document.createElement('div');
+                    gridWrap.className = `photo-grid-container grid-${currentGridMode}`;
+
+                    const startIdx = pageIdx * perPage;
+                    for (let slot = 0; slot < perPage; slot++) {
+                        const globalPhotoIdx = startIdx + slot;
+                        const photoItem = photos[globalPhotoIdx] || { src: '', caption: '說明:' };
+                        gridWrap.appendChild(buildPhotoCellHtml(photoItem, globalPhotoIdx, photos));
+                    }
+
+                    pageElem.appendChild(gridWrap);
+                    wrapper.appendChild(pageElem);
+                }
+            } else {
+                // 工程驗收報告：整份文件只有第 1 頁有表頭資料
+                const photos = acceptanceData.photos;
+                const totalPages = Math.max(1, Math.ceil(photos.length / perPage));
+
+                for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+                    const pageElem = document.createElement('div');
+                    pageElem.className = 'a4-page';
+
+                    // 僅第 1 頁顯示表頭
+                    if (pageIdx === 0) {
+                        pageElem.innerHTML += buildAcceptanceHeaderHtml();
+                    }
+
+                    // 照片橫幅列
+                    pageElem.innerHTML += `
+                        <div class="photo-banner">
+                            施工照片暨說明：
+                        </div>
+                    `;
+
+                    // 照片格線容器
+                    const gridWrap = document.createElement('div');
+                    gridWrap.className = `photo-grid-container grid-${currentGridMode}`;
+
+                    const startIdx = pageIdx * perPage;
+                    for (let slot = 0; slot < perPage; slot++) {
+                        const globalPhotoIdx = startIdx + slot;
+                        const photoItem = photos[globalPhotoIdx] || { src: '', caption: '' };
+                        gridWrap.appendChild(buildPhotoCellHtml(photoItem, globalPhotoIdx, photos));
+                    }
+
+                    pageElem.appendChild(gridWrap);
+                    wrapper.appendChild(pageElem);
+                }
+            }
+
+            // 重新套用視窗適配縮放
+            applyCurrentScale();
+        }
+
+        /**
+         * 視窗適配與縮放控制邏輯
+         */
+        function setZoomMode(mode) {
+            zoomMode = mode;
+            document.getElementById('btn-fit-page').classList.toggle('active', mode === 'fitPage');
+            document.getElementById('btn-fit-width').classList.toggle('active', mode === 'fitWidth');
+            document.getElementById('btn-zoom-100').classList.toggle('active', mode === '100');
+
+            if (mode === '100') {
+                currentScale = 1.0;
+            }
+            applyCurrentScale();
+        }
+
+        function adjustZoom(delta) {
+            zoomMode = 'custom';
+            document.getElementById('btn-fit-page').classList.remove('active');
+            document.getElementById('btn-fit-width').classList.remove('active');
+            document.getElementById('btn-zoom-100').classList.remove('active');
+
+            currentScale = Math.max(0.3, Math.min(2.0, currentScale + delta));
+            applyCurrentScale();
+        }
+
+        function applyCurrentScale() {
+            const container = document.getElementById('preview-scroll-container');
+            const wrapper = document.getElementById('preview-pages-wrapper');
+            const firstPage = wrapper.querySelector('.a4-page');
+
+            if (!container || !wrapper || !firstPage) return;
+
+            // 取得 A4 原始像素尺寸 (未縮放前)
+            const a4W = firstPage.offsetWidth || 794;  // 約 210mm (96DPI)
+            const a4H = firstPage.offsetHeight || 1123; // 約 297mm (96DPI)
+
+            const availableW = container.clientWidth - 60; // 扣除左右 padding (30px*2)
+            const availableH = container.clientHeight - 80; // 扣除頂部工具列與 padding
+
+            if (zoomMode === 'fitPage') {
+                const scaleW = availableW / a4W;
+                const scaleH = availableH / a4H;
+                currentScale = Math.min(scaleW, scaleH);
+            } else if (zoomMode === 'fitWidth') {
+                currentScale = availableW / a4W;
+            }
+
+            // 套用縮放
+            wrapper.style.transform = `scale(${currentScale})`;
+
+            // 更新預覽容器佔位高度，保證多頁滾動流暢
+            const totalNaturalH = wrapper.scrollHeight;
+            wrapper.style.marginBottom = `${(totalNaturalH * (currentScale - 1))}px`;
+
+            // 更新介面上的百分比數字
+            document.getElementById('zoom-text').textContent = `${Math.round(currentScale * 100)}%`;
+        }
+
+        /**
+         * 建立施工日誌第一頁表頭 HTML
+         */
+        function buildDailyHeaderHtml(curDay) {
+            const dateStr = formatDateText(curDay.dateObj);
+            let customHtml = '';
+            curDay.customFields.forEach(cf => {
+                if (cf.checked) {
+                    customHtml += `
+                        <tr>
+                            <th style="width: 18%;"><div class="cell-content-center">${escapeHtml(cf.label)}</div></th>
+                            <td colspan="3" class="text-left"><div class="cell-content-left">${escapeHtml(cf.value || '')}</div></td>
+                        </tr>
+                    `;
+                }
+            });
+
+            return `
+                <div class="eng-doc-title">施工日誌</div>
+                <table class="eng-table">
+                    <tr>
+                        <th style="width: 18%;"><div class="cell-content-center">案場名稱</div></th>
+                        <td style="width: 32%;" class="text-left"><div class="cell-content-left">${escapeHtml(curDay.siteName)}</div></td>
+                        <th style="width: 18%;"><div class="cell-content-center">施工日期:</div></th>
+                        <td style="width: 32%;" class="text-left"><div class="cell-content-left">${dateStr}</div></td>
+                    </tr>
+                    <tr>
+                        <th><div class="cell-content-center">案場地址</div></th>
+                        <td colspan="3" class="text-left"><div class="cell-content-left">${escapeHtml(curDay.siteAddress)}</div></td>
+                    </tr>
+                    ${customHtml}
+                </table>
+            `;
+        }
+
+        /**
+         * 建立施工項目明細表 HTML
+         */
+        function buildDailyWorkItemsHtml(workItems) {
+            let trs = '';
+            workItems.forEach(item => {
+                trs += `
+                    <tr>
+                        <td style="width: 32%;"><div class="cell-content-center">${escapeHtml(item.item)}</div></td>
+                        <td style="width: 10%;"><div class="cell-content-center">${escapeHtml(item.workers)}</div></td>
+                        <td style="width: 12%;"><div class="cell-content-center">${escapeHtml(item.tool)}</div></td>
+                        <td style="width: 12%;"><div class="cell-content-center">${escapeHtml(item.duration)}</div></td>
+                        <td style="width: 22%;"><div class="cell-content-center">${escapeHtml(item.material)}</div></td>
+                        <td style="width: 12%;"><div class="cell-content-center">${escapeHtml(item.qty)}</div></td>
+                    </tr>
+                `;
+            });
+
+            return `
+                <table class="work-items-table">
+                    <tr>
+                        <th style="width: 32%;"><div class="cell-content-center">施工項目</div></th>
+                        <th style="width: 10%;"><div class="cell-content-center">施工人數</div></th>
+                        <th style="width: 12%;"><div class="cell-content-center">使用機具</div></th>
+                        <th style="width: 12%;"><div class="cell-content-center">機具數量<br>作業時間</div></th>
+                        <th style="width: 22%;"><div class="cell-content-center">材料名稱</div></th>
+                        <th style="width: 12%;"><div class="cell-content-center">材料數量</div></th>
+                    </tr>
+                    ${trs}
+                </table>
+            `;
+        }
+
+        /**
+         * 建立工程驗收報告第一頁表頭 HTML
+         */
+        function buildAcceptanceHeaderHtml() {
+            const ch = acceptanceData.checks;
+            let rows = '';
+
+            // 第一列: 維運/施工廠商 與 驗收日
+            let r1 = '';
+            if (ch.contractor && ch.acceptDate) {
+                r1 = `
+                    <tr>
+                        <th style="width: 20%;"><div class="cell-content-center">維運/施工廠商:</div></th>
+                        <td style="width: 35%;" class="text-left"><div class="cell-content-left">${escapeHtml(acceptanceData.contractor)}</div></td>
+                        <th style="width: 15%;"><div class="cell-content-center">驗收日:</div></th>
+                        <td style="width: 30%;" class="text-left"><div class="cell-content-left">${formatDateText(acceptanceData.acceptDate)}</div></td>
+                    </tr>
+                `;
+            } else if (ch.contractor) {
+                r1 = `<tr><th><div class="cell-content-center">維運/施工廠商:</div></th><td colspan="3" class="text-left"><div class="cell-content-left">${escapeHtml(acceptanceData.contractor)}</div></td></tr>`;
+            } else if (ch.acceptDate) {
+                r1 = `<tr><th><div class="cell-content-center">驗收日:</div></th><td colspan="3" class="text-left"><div class="cell-content-left">${formatDateText(acceptanceData.acceptDate)}</div></td></tr>`;
+            }
+
+            // 第二列: 案場/容量 與 起訖日
+            let r2 = '';
+            const periodStr = formatDateRangeText(acceptanceData.periodDate);
+            if (ch.siteCapacity && ch.periodDate) {
+                r2 = `
+                    <tr>
+                        <th style="width: 20%;"><div class="cell-content-center">案場/容量:</div></th>
+                        <td style="width: 35%;" class="text-left"><div class="cell-content-left">${escapeHtml(acceptanceData.siteCapacity)}</div></td>
+                        <th style="width: 15%;"><div class="cell-content-center">起訖日:</div></th>
+                        <td style="width: 30%;" class="text-left"><div class="cell-content-left">${periodStr}</div></td>
+                    </tr>
+                `;
+            } else if (ch.siteCapacity) {
+                r2 = `<tr><th><div class="cell-content-center">案場/容量:</div></th><td colspan="3" class="text-left"><div class="cell-content-left">${escapeHtml(acceptanceData.siteCapacity)}</div></td></tr>`;
+            } else if (ch.periodDate) {
+                r2 = `<tr><th><div class="cell-content-center">起訖日:</div></th><td colspan="3" class="text-left"><div class="cell-content-left">${periodStr}</div></td></tr>`;
+            }
+
+            // 第三列: 備註
+            let r3 = '';
+            if (ch.remarks) {
+                r3 = `
+                    <tr>
+                        <th><div class="cell-content-center">備註:</div></th>
+                        <td colspan="3" class="text-left"><div class="cell-content-left">${escapeHtml(acceptanceData.remarks || '')}</div></td>
+                    </tr>
+                `;
+            }
+
+            // 自訂欄位
+            let customRows = '';
+            acceptanceData.customFields.forEach(cf => {
+                if (cf.checked) {
+                    customRows += `
+                        <tr>
+                            <th><div class="cell-content-center">${escapeHtml(cf.label)}:</div></th>
+                            <td colspan="3" class="text-left"><div class="cell-content-left">${escapeHtml(cf.value || '')}</div></td>
+                        </tr>
+                    `;
+                }
+            });
+
+            return `
+                ${ch.docTitle ? `<div class="eng-doc-title">${escapeHtml(acceptanceData.docTitle)}</div>` : ''}
+                <table class="eng-table">
+                    ${r1}
+                    ${r2}
+                    ${r3}
+                    ${customRows}
+                </table>
+            `;
+        }
+
+        /**
+         * 建立單一照片格位 DOM (支援拖放、點擊與照片拖曳排序)
+         */
+        function buildPhotoCellHtml(photoItem, index, photoList) {
+            const cell = document.createElement('div');
+            cell.className = 'photo-cell';
+            cell.dataset.index = index;
+
+            // 照片或操作提示包裝層
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'photo-img-wrap';
+
+            // 若該格已有照片，開啟可拖曳排序功能 (draggable)
+            if (photoItem.src) {
+                cell.draggable = true;
+                imgWrap.style.cursor = 'grab';
+                imgWrap.innerHTML = `
+                    <div class="drag-handle-badge">
+                        <i class="fa-solid fa-arrows-up-down-left-right"></i> 拖曳排序
+                    </div>
+                    <img src="${photoItem.src}" class="photo-img" alt="工程照片">
+                `;
+            } else {
+                cell.draggable = false;
+                imgWrap.innerHTML = `
+                    <div class="empty-slot-hint">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>點擊或拖放照片</span>
+                    </div>
+                `;
+            }
+
+            // --- 拖曳排序事件 (照片與照片之間互換位置) ---
+            cell.ondragstart = (e) => {
+                // 如果是從外部拖檔案進來，則不觸發內部排序
+                if (!photoItem.src) {
+                    e.preventDefault();
+                    return;
+                }
+                draggedPhotoIndex = index;
+                cell.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(index));
+            };
+
+            cell.ondragend = () => {
+                cell.classList.remove('dragging');
+                document.querySelectorAll('.photo-cell').forEach(c => c.classList.remove('drag-hover'));
+                draggedPhotoIndex = null;
+            };
+
+            // 支援拖放 (檔案上傳 或 照片排序置放)
+            cell.ondragover = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cell.classList.add('drag-hover');
+                if (draggedPhotoIndex !== null) {
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            };
+
+            cell.ondragleave = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cell.classList.remove('drag-hover');
+            };
+
+            cell.ondrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cell.classList.remove('drag-hover');
+
+                // 情況 1：電腦外部檔案拖拉上傳
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    insertFilesStartingAt(e.dataTransfer.files, index);
+                    return;
+                }
+
+                // 情況 2：內部照片卡片拖曳排序交換 (Swap)
+                if (draggedPhotoIndex !== null && draggedPhotoIndex !== index) {
+                    ensurePhotoListLength(photoList, Math.max(draggedPhotoIndex, index));
+                    const temp = photoList[draggedPhotoIndex];
+                    photoList[draggedPhotoIndex] = photoList[index];
+                    photoList[index] = temp;
+                    renderPreviewPages();
+                }
+            };
+
+            // 單格點擊上傳更換照片
+            imgWrap.onclick = (e) => {
+                // 若剛剛是拖曳動作則不觸發檔案選擇
+                if (cell.classList.contains('dragging')) return;
+                pendingUploadSlotIndex = index;
+                document.getElementById('single-file-input').click();
+            };
+
+            // 照片下方說明列
+            const captionBar = document.createElement('div');
+            captionBar.className = 'photo-caption-bar';
+
+            const captionInput = document.createElement('input');
+            captionInput.type = 'text';
+            captionInput.className = 'photo-caption-input';
+            captionInput.value = photoItem.caption || '';
+            captionInput.placeholder = '輸入照片說明...';
+            // 防止點擊輸入說明文字時意外觸發拖曳
+            captionInput.onmousedown = (e) => e.stopPropagation();
+            captionInput.onfocus = () => { lastFocusedCaptionIndex = index; };
+            captionInput.oninput = (e) => {
+                ensurePhotoListLength(photoList, index);
+                photoList[index].caption = e.target.value;
+            };
+
+            captionBar.appendChild(captionInput);
+            cell.appendChild(imgWrap);
+            cell.appendChild(captionBar);
+
+            return cell;
+        }
+
+        function ensurePhotoListLength(list, index) {
+            while (list.length <= index) {
+                list.push({ src: '', caption: '說明:' });
+            }
+        }
+
+        /**
+         * 照片上傳邏輯處理
+         */
+        function triggerBatchUpload() {
+            document.getElementById('batch-file-input').click();
+        }
+
+        function handleBatchFileSelect(event) {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+                insertFilesStartingAt(files, 0);
+            }
+            event.target.value = '';
+        }
+
+        function handleSingleFileSelect(event) {
+            const files = event.target.files;
+            if (files && files.length > 0 && pendingUploadSlotIndex !== null) {
+                insertFilesStartingAt(files, pendingUploadSlotIndex);
+            }
+            event.target.value = '';
+            pendingUploadSlotIndex = null;
+        }
+
+        function insertFilesStartingAt(fileList, startIndex) {
+            const targetPhotos = currentModule === 'daily'
+                ? dailyDaysData[activeDailyDayIndex].photos
+                : acceptanceData.photos;
+
+            let loadedCount = 0;
+            const filesArr = Array.from(fileList);
+
+            filesArr.forEach((file, idx) => {
+                const targetIdx = startIndex + idx;
+                ensurePhotoListLength(targetPhotos, targetIdx);
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    targetPhotos[targetIdx].src = e.target.result;
+                    loadedCount++;
+                    if (loadedCount === filesArr.length) {
+                        renderPreviewPages();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function setupBatchDropzone() {
+            const dz = document.getElementById('batch-dropzone');
+            if (!dz) return;
+            dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('dragover'); };
+            dz.ondragleave = () => { dz.classList.remove('dragover'); };
+            dz.ondrop = (e) => {
+                e.preventDefault();
+                dz.classList.remove('dragover');
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    insertFilesStartingAt(e.dataTransfer.files, 0);
+                }
+            };
+        }
+
+        function clearCurrentPhotos() {
+            if (currentModule === 'daily') {
+                dailyDaysData[activeDailyDayIndex].photos.forEach(p => p.src = '');
+            } else {
+                acceptanceData.photos.forEach(p => p.src = '');
+            }
+            renderPreviewPages();
+        }
+
+        /**
+         * 施工天數增刪複製
+         */
+        function addNewDay() {
+            const prev = dailyDaysData[dailyDaysData.length - 1];
+            let nextD = parseInt(prev.dateObj.day, 10) + 1;
+            let nextM = prev.dateObj.month;
+            let nextY = prev.dateObj.year;
+
+            const newDay = {
+                dateObj: { year: nextY, month: nextM, day: String(nextD), format: prev.dateObj.format },
+                siteName: prev.siteName,
+                siteAddress: prev.siteAddress,
+                customFields: JSON.parse(JSON.stringify(prev.customFields)),
+                workItems: [
+                    { item: '施工項目', workers: '4', tool: '手工具', duration: '4hr', material: '五金耗材', qty: '一式' }
+                ],
+                photos: [
+                    { src: '', caption: '說明:' },
+                    { src: '', caption: '說明:' },
+                    { src: '', caption: '說明:' },
+                    { src: '', caption: '說明:' },
+                    { src: '', caption: '說明:' },
+                    { src: '', caption: '說明:' }
+                ]
+            };
+
+            dailyDaysData.push(newDay);
+            activeDailyDayIndex = dailyDaysData.length - 1;
+            renderAll();
+        }
+
+        function duplicateCurrentDay() {
+            const cur = dailyDaysData[activeDailyDayIndex];
+            const clone = JSON.parse(JSON.stringify(cur));
+            clone.dateObj.day = String(parseInt(clone.dateObj.day, 10) + 1);
+            dailyDaysData.splice(activeDailyDayIndex + 1, 0, clone);
+            activeDailyDayIndex = activeDailyDayIndex + 1;
+            renderAll();
+        }
+
+        function deleteCurrentDay() {
+            if (dailyDaysData.length <= 1) return;
+            dailyDaysData.splice(activeDailyDayIndex, 1);
+            if (activeDailyDayIndex >= dailyDaysData.length) {
+                activeDailyDayIndex = dailyDaysData.length - 1;
+            }
+            renderAll();
+        }
+
+        /**
+         * 自訂表頭欄位
+         */
+        function openAddCustomFieldPrompt() {
+            const label = prompt('請輸入自訂欄位名稱 (例如: 監造單位、工程編號)：');
+            if (label && label.trim()) {
+                const targetList = currentModule === 'daily'
+                    ? dailyDaysData[activeDailyDayIndex].customFields
+                    : acceptanceData.customFields;
+
+                targetList.push({
+                    label: label.trim(),
+                    value: '',
+                    checked: true
+                });
+                renderAll();
+            }
+        }
+
+        /**
+         * 常用詞彙管理
+         */
+        function renderTags() {
+            const container = document.getElementById('tags-container');
+            container.innerHTML = '';
+            quickTags.forEach((tag, idx) => {
+                const tagElem = document.createElement('span');
+                tagElem.className = 'word-tag';
+                tagElem.innerHTML = `
+                    <span>${escapeHtml(tag)}</span>
+                    <i class="fa-solid fa-xmark tag-del-btn" title="刪除此詞彙"></i>
+                `;
+                // 點擊詞彙代入焦點
+                tagElem.querySelector('span').onclick = () => applyTagToCaption(tag);
+                // 點擊 × 刪除
+                tagElem.querySelector('.tag-del-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    quickTags.splice(idx, 1);
+                    renderTags();
+                };
+                container.appendChild(tagElem);
+            });
+        }
+
+        function addNewTag() {
+            const input = document.getElementById('new-tag-input');
+            const val = input.value.trim();
+            if (val && !quickTags.includes(val)) {
+                quickTags.push(val);
+                input.value = '';
+                renderTags();
+            }
+        }
+
+        function applyTagToCaption(text) {
+            const targetPhotos = currentModule === 'daily'
+                ? dailyDaysData[activeDailyDayIndex].photos
+                : acceptanceData.photos;
+
+            if (lastFocusedCaptionIndex !== null && targetPhotos[lastFocusedCaptionIndex]) {
+                const prefix = currentModule === 'daily' ? '說明:' : '';
+                targetPhotos[lastFocusedCaptionIndex].caption = prefix + text;
+                renderPreviewPages();
+            }
+        }
+
+        /**
+         * 原生 Canvas 高解析度向量級 PDF 產出引擎
+         * 徹底保證：標楷體、文字幾何垂直置中、照片保持長寬比、空白照片格完全留白
+         */
+        async function exportToPdfCanvas() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'flex';
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const A4_W = 210;
+                const A4_H = 297;
+
+                // 準備欲產出的頁面清單
+                const pagesToExport = [];
+                const perPage = currentGridMode === '3x2' ? 6 : 9;
+
+                if (currentModule === 'daily') {
+                    dailyDaysData.forEach((day, dIdx) => {
+                        const totalP = Math.max(1, Math.ceil(day.photos.length / perPage));
+                        for (let p = 0; p < totalP; p++) {
+                            pagesToExport.push({
+                                module: 'daily',
+                                dayData: day,
+                                pageIdx: p,
+                                isFirstPageOfDay: p === 0,
+                                photos: day.photos.slice(p * perPage, (p + 1) * perPage)
+                            });
+                        }
+                    });
+                } else {
+                    const totalP = Math.max(1, Math.ceil(acceptanceData.photos.length / perPage));
+                    for (let p = 0; p < totalP; p++) {
+                        pagesToExport.push({
+                            module: 'accept',
+                            data: acceptanceData,
+                            pageIdx: p,
+                            isFirstPageOfDoc: p === 0,
+                            photos: acceptanceData.photos.slice(p * perPage, (p + 1) * perPage)
+                        });
+                    }
+                }
+
+                // 依序以 300 DPI Canvas 繪製每頁
+                for (let i = 0; i < pagesToExport.length; i++) {
+                    document.getElementById('loading-text').textContent = `正在產出第 ${i + 1} / ${pagesToExport.length} 頁...`;
+                    const pageMeta = pagesToExport[i];
+
+                    const canvas = document.createElement('canvas');
+                    // 300 DPI A4 像素解析度
+                    canvas.width = 2480;
+                    canvas.height = 3508;
+                    const ctx = canvas.getContext('2d');
+
+                    // 繪製白色底
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // 繪製內容
+                    await drawPageOnCanvas(ctx, pageMeta, canvas.width, canvas.height);
+
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    if (i > 0) pdf.addPage('a4', 'p');
+                    pdf.addImage(imgData, 'JPEG', 0, 0, A4_W, A4_H);
+                }
+
+                const fileName = currentModule === 'daily'
+                    ? `施工日誌_${dailyDaysData[0].siteName || '工程'}.pdf`
+                    : `工程驗收報告_${acceptanceData.docTitle || '驗收'}.pdf`;
+
+                pdf.save(fileName);
+            } catch (err) {
+                console.error(err);
+                alert('匯出 PDF 時發生錯誤，請稍後再試或使用列印功能！');
+            } finally {
+                overlay.style.display = 'none';
+            }
+        }
+
+        /**
+         * Canvas 頁面繪製核心函式
+         */
+        async function drawPageOnCanvas(ctx, meta, cW, cH) {
+            const FONT_KAI = '"標楷體", "DFKai-SB", "BiauKai", "TW-Kai", serif';
+            const marginX = 177; // 15mm 邊距
+            const marginY = 142; // 12mm 邊距
+            const contentW = cW - marginX * 2;
+            let curY = marginY;
+
+            ctx.fillStyle = '#000000';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+
+            // 1. 繪製表頭 (施工日誌每天第1頁，或驗收報告整份第1頁)
+            if (meta.module === 'daily' && meta.isFirstPageOfDay) {
+                // (a) 標題
+                ctx.font = `bold 64px ${FONT_KAI}`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('施工日誌', cW / 2, curY + 36);
+                curY += 80;
+
+                // (b) 表頭資料表格
+                const rowH = 70;
+                const day = meta.dayData;
+                const rowsData = [
+                    [
+                        { txt: '案場名稱', w: 0.18, isHeader: true },
+                        { txt: day.siteName, w: 0.32, isHeader: false, align: 'left' },
+                        { txt: '施工日期:', w: 0.18, isHeader: true },
+                        { txt: formatDateText(day.dateObj), w: 0.32, isHeader: false, align: 'left' }
+                    ],
+                    [
+                        { txt: '案場地址', w: 0.18, isHeader: true },
+                        { txt: day.siteAddress, w: 0.82, isHeader: false, align: 'left', colspan: 3 }
+                    ]
+                ];
+
+                // 加上自訂欄位
+                day.customFields.forEach(cf => {
+                    if (cf.checked) {
+                        rowsData.push([
+                            { txt: cf.label, w: 0.18, isHeader: true },
+                            { txt: cf.value || '', w: 0.82, isHeader: false, align: 'left', colspan: 3 }
+                        ]);
+                    }
+                });
+
+                curY = drawCanvasTable(ctx, marginX, curY, contentW, rowH, rowsData, FONT_KAI, 32);
+
+                // (c) 施工項目明細表格
+                const itemRowH = 65;
+                const itemHeader = [
+                    { txt: '施工項目', w: 0.32, isHeader: true },
+                    { txt: '施工人數', w: 0.10, isHeader: true },
+                    { txt: '使用機具', w: 0.12, isHeader: true },
+                    { txt: '機具數量\n作業時間', w: 0.12, isHeader: true },
+                    { txt: '材料名稱', w: 0.22, isHeader: true },
+                    { txt: '材料數量', w: 0.12, isHeader: true }
+                ];
+                const itemRows = [itemHeader];
+                day.workItems.forEach(wi => {
+                    itemRows.push([
+                        { txt: wi.item, w: 0.32 },
+                        { txt: wi.workers, w: 0.10 },
+                        { txt: wi.tool, w: 0.12 },
+                        { txt: wi.duration, w: 0.12 },
+                        { txt: wi.material, w: 0.22 },
+                        { txt: wi.qty, w: 0.12 }
+                    ]);
+                });
+
+                curY = drawCanvasTable(ctx, marginX, curY - 3, contentW, itemRowH, itemRows, FONT_KAI, 28);
+                curY += 6;
+            } else if (meta.module === 'accept' && meta.isFirstPageOfDoc) {
+                // 工程驗收報告第一頁
+                const dat = meta.data;
+                const ch = dat.checks;
+
+                if (ch.docTitle) {
+                    ctx.font = `bold 64px ${FONT_KAI}`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(dat.docTitle, cW / 2, curY + 36);
+                    curY += 80;
+                }
+
+                const rowH = 70;
+                const rowsData = [];
+
+                if (ch.contractor && ch.acceptDate) {
+                    rowsData.push([
+                        { txt: '維運/施工廠商:', w: 0.20, isHeader: true },
+                        { txt: dat.contractor, w: 0.35, isHeader: false, align: 'left' },
+                        { txt: '驗收日:', w: 0.15, isHeader: true },
+                        { txt: formatDateText(dat.acceptDate), w: 0.30, isHeader: false, align: 'left' }
+                    ]);
+                } else if (ch.contractor) {
+                    rowsData.push([
+                        { txt: '維運/施工廠商:', w: 0.20, isHeader: true },
+                        { txt: dat.contractor, w: 0.80, isHeader: false, align: 'left', colspan: 3 }
+                    ]);
+                }
+
+                if (ch.siteCapacity && ch.periodDate) {
+                    rowsData.push([
+                        { txt: '案場/容量:', w: 0.20, isHeader: true },
+                        { txt: dat.siteCapacity, w: 0.35, isHeader: false, align: 'left' },
+                        { txt: '起訖日:', w: 0.15, isHeader: true },
+                        { txt: formatDateRangeText(dat.periodDate), w: 0.30, isHeader: false, align: 'left' }
+                    ]);
+                }
+
+                if (ch.remarks) {
+                    rowsData.push([
+                        { txt: '備註:', w: 0.20, isHeader: true },
+                        { txt: dat.remarks || '', w: 0.80, isHeader: false, align: 'left', colspan: 3 }
+                    ]);
+                }
+
+                dat.customFields.forEach(cf => {
+                    if (cf.checked) {
+                        rowsData.push([
+                            { txt: cf.label + ':', w: 0.20, isHeader: true },
+                            { txt: cf.value || '', w: 0.80, isHeader: false, align: 'left', colspan: 3 }
+                        ]);
+                    }
+                });
+
+                if (rowsData.length > 0) {
+                    curY = drawCanvasTable(ctx, marginX, curY, contentW, rowH, rowsData, FONT_KAI, 32);
+                    curY += 6;
+                }
+            }
+
+            // 2. 照片橫幅標題（乾淨純留白，絕不顯示格數與長寬比說明）
+            const bannerH = 65;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(marginX, curY, contentW, bannerH);
+            ctx.strokeRect(marginX, curY, contentW, bannerH);
+
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold 32px ${FONT_KAI}`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('施工照片暨說明：', marginX + 20, curY + bannerH / 2);
+            curY += bannerH;
+
+            // 3. 照片九宮格 / 六宮格繪製
+            const gridH = (cH - marginY) - curY;
+            const cols = currentGridMode === '3x2' ? 2 : 3;
+            const rows = 3;
+            const colW = contentW / cols;
+            const rowH = gridH / rows;
+            const captionH = 55; // 照片下方說明列高度
+
+            const photosToDraw = meta.photos;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const slotIdx = r * cols + c;
+                    const cellX = marginX + c * colW;
+                    const cellY = curY + r * rowH;
+                    const photo = photosToDraw[slotIdx];
+
+                    // 外框格線
+                    ctx.strokeRect(cellX, cellY, colW, rowH);
+
+                    // 說明列框線與文字
+                    const capY = cellY + rowH - captionH;
+                    ctx.strokeRect(cellX, capY, colW, captionH);
+
+                    if (photo && photo.caption) {
+                        ctx.fillStyle = '#000000';
+                        ctx.font = `normal 28px ${FONT_KAI}`;
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(photo.caption, cellX + 14, capY + captionH / 2);
+                    }
+
+                    // 繪製照片（若有上傳）；若為空白格則「完全純白留空」，絕不繪製任何字樣
+                    if (photo && photo.src) {
+                        try {
+                            const img = await loadImageAsync(photo.src);
+                            const imgAreaW = colW - 16;
+                            const imgAreaH = (rowH - captionH) - 16;
+                            const areaX = cellX + 8;
+                            const areaY = cellY + 8;
+
+                            // 嚴格維持長寬比 (object-fit: contain)
+                            const hRatio = imgAreaW / img.width;
+                            const vRatio = imgAreaH / img.height;
+                            const ratio = Math.min(hRatio, vRatio);
+
+                            const finalW = img.width * ratio;
+                            const finalH = img.height * ratio;
+                            const finalX = areaX + (imgAreaW - finalW) / 2;
+                            const finalY = areaY + (imgAreaH - finalH) / 2;
+
+                            ctx.drawImage(img, finalX, finalY, finalW, finalH);
+                        } catch (err) {
+                            console.warn('圖片載入失敗，略過繪製:', err);
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Canvas 表格繪製輔助工具（幾何垂直精準置中）
+         */
+        function drawCanvasTable(ctx, startX, startY, totalW, rowH, rows, fontFam, fontSize) {
+            let y = startY;
+
+            rows.forEach(rowCols => {
+                let x = startX;
+                rowCols.forEach(col => {
+                    const cellW = totalW * col.w;
+
+                    // 填底與畫線
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x, y, cellW, rowH);
+                    ctx.strokeRect(x, y, cellW, rowH);
+
+                    // 繪製文字 (幾何垂直置中)
+                    ctx.fillStyle = '#000000';
+                    ctx.font = `${col.isHeader ? 'bold' : 'normal'} ${fontSize}px ${fontFam}`;
+                    ctx.textBaseline = 'middle';
+
+                    const lines = String(col.txt || '').split('\n');
+                    const lineH = fontSize * 1.25;
+                    const totalTextH = lines.length * lineH;
+                    const textStartY = y + (rowH - totalTextH) / 2 + lineH / 2;
+
+                    lines.forEach((lineText, lIdx) => {
+                        const curLineY = textStartY + lIdx * lineH;
+                        if (col.align === 'left') {
+                            ctx.textAlign = 'left';
+                            ctx.fillText(lineText, x + 18, curLineY);
+                        } else {
+                            ctx.textAlign = 'center';
+                            ctx.fillText(lineText, x + cellW / 2, curLineY);
+                        }
+                    });
+
+                    x += cellW;
+                });
+                y += rowH;
+            });
+
+            return y;
+        }
+
+        function loadImageAsync(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
