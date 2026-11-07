@@ -991,10 +991,22 @@
             '圍籬修復', '保全/監視器復原', '電性量測OK', '配線完成'
         ];
 
-        // 施工日誌天數資料集 (參考範例)
+        // 取得當天日期輔助物件
+        function getTodayDateObj(format = 'zh') {
+            const now = new Date();
+            return {
+                year: String(now.getFullYear()),
+                month: String(now.getMonth() + 1),
+                day: String(now.getDate()),
+                format: format
+            };
+        }
+
+        // 施工日誌天數資料集 (預設第一天為今天)
+        const todayObj = getTodayDateObj('zh');
         let dailyDaysData = [
             {
-                dateObj: { year: '2025', month: '10', day: '7', format: 'zh' },
+                dateObj: { ...todayObj },
                 siteName: '陳秀娟(失竊修復工程)',
                 siteAddress: '屏東縣新園鄉新南段75地號(22.515890, 120.456980)',
                 customFields: [],
@@ -1010,38 +1022,19 @@
                     { src: '', caption: '說明:配管配線' },
                     { src: '', caption: '說明:配管配線' }
                 ]
-            },
-            {
-                dateObj: { year: '2025', month: '10', day: '8', format: 'zh' },
-                siteName: '陳秀娟(失竊修復工程)',
-                siteAddress: '屏東縣新園鄉新南段75地號(22.515890, 120.456980)',
-                customFields: [],
-                workItems: [
-                    { item: '配線(續)', workers: '4', tool: '手工具', duration: '4hr', material: '五金耗材', qty: '一式' },
-                    { item: '送電量測', workers: '4', tool: '電表', duration: '1hr', material: 'NA', qty: 'NA' },
-                    { item: '圍籬修復', workers: '4', tool: '手工具', duration: '1hr', material: '五金耗材', qty: '一式' },
-                    { item: '保全/監視器復原', workers: '4', tool: '手工具', duration: '2hr', material: '五金耗材', qty: '一式' }
-                ],
-                photos: [
-                    { src: '', caption: '說明:配線(續)' },
-                    { src: '', caption: '說明:配線(續)' },
-                    { src: '', caption: '說明:配線完成' },
-                    { src: '', caption: '說明:電性量測OK' },
-                    { src: '', caption: '說明:圍籬復原。' },
-                    { src: '', caption: '說明:監控攝影機畫面。' }
-                ]
             }
         ];
 
-        // 工程驗收報告資料集 (參考 工程驗收報告範例.pdf)
+        // 工程驗收報告資料集 (驗收日與起訖日預設為今天)
+        const todaySlash = getTodayDateObj('slash');
         let acceptanceData = {
             docTitle: '電線遭竊破壞緊急修繕工程',
             contractor: '54902391-新綠能源',
-            acceptDate: { year: '2026', month: '5', day: '25', format: 'slash' },
+            acceptDate: { ...todaySlash },
             siteCapacity: '上烏龍段608(498-4003)/93.39kW',
             periodDate: {
-                startYear: '2026', startMonth: '5', startDay: '24',
-                endYear: '2026', endMonth: '5', endDay: '25',
+                startYear: todaySlash.year, startMonth: todaySlash.month, startDay: todaySlash.day,
+                endYear: todaySlash.year, endMonth: todaySlash.month, endDay: todaySlash.day,
                 format: 'slash'
             },
             remarks: '',
