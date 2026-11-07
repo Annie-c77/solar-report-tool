@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>工程文件PDF自動產出工具V1.1</title>
+    <title>工程文件PDF自動產出工具V1.2</title>
     <!-- 引入 FontAwesome 圖示與 jsPDF（僅供匯出使用） -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1261,11 +1261,17 @@
         let zoomMode = 'fitPage'; // 'fitPage' | 'fitWidth' | 'custom'
         let currentScale = 1.0;
 
-        // 全域復原歷史棧 (Undo History Stack)
+        // 全域復原歷史棧 (Undo History Stack) 與各分區獨立復原儲存
         let undoStack = [];
+        let sectionUndoState = {
+            header: null,
+            photo: null,
+            tags: null,
+            docs: null
+        };
 
-        function saveSnapshot() {
-            const snapshot = {
+        function getFullStateClone() {
+            return {
                 currentModule,
                 currentGridMode,
                 activeDailyDayIndex,
@@ -1273,32 +1279,73 @@
                 dailyDaysData: JSON.parse(JSON.stringify(dailyDaysData)),
                 acceptanceData: JSON.parse(JSON.stringify(acceptanceData))
             };
+        }
+
+        function saveSnapshot(actionType = null) {
+            const snapshot = getFullStateClone();
             undoStack.push(snapshot);
-            if (undoStack.length > 20) undoStack.shift();
+            if (undoStack.length > 25) undoStack.shift();
+
+            if (actionType && sectionUndoState.hasOwnProperty(actionType)) {
+                sectionUndoState[actionType] = snapshot;
+            }
             updateUndoButtons();
+        }
+
+        function triggerSectionUndo(sectionType) {
+            if (sectionUndoState[sectionType]) {
+                restoreFromState(sectionUndoState[sectionType]);
+                sectionUndoState[sectionType] = null;
+                updateUndoButtons();
+            } else {
+                triggerGlobalUndo();
+            }
         }
 
         function triggerGlobalUndo() {
             if (undoStack.length === 0) return;
             const previousState = undoStack.pop();
-            currentModule = previousState.currentModule;
-            currentGridMode = previousState.currentGridMode;
-            activeDailyDayIndex = previousState.activeDailyDayIndex;
-            quickTags = previousState.quickTags;
-            dailyDaysData = previousState.dailyDaysData;
-            acceptanceData = previousState.acceptanceData;
-
+            restoreFromState(previousState);
             updateUndoButtons();
+        }
+
+        function restoreFromState(state) {
+            if (!state) return;
+            currentModule = state.currentModule;
+            currentGridMode = state.currentGridMode;
+            activeDailyDayIndex = state.activeDailyDayIndex;
+            quickTags = JSON.parse(JSON.stringify(state.quickTags));
+            dailyDaysData = JSON.parse(JSON.stringify(state.dailyDaysData));
+            acceptanceData = JSON.parse(JSON.stringify(state.acceptanceData));
+
+            // 同步模組與按鈕狀態
+            document.getElementById('btn-mod-daily').classList.toggle('active', currentModule === 'daily');
+            document.getElementById('btn-mod-accept').classList.toggle('active', currentModule === 'accept');
+            document.getElementById('sec-days-box').style.display = currentModule === 'daily' ? 'block' : 'none';
+            document.getElementById('btn-grid-6').classList.toggle('active', currentGridMode === '3x2');
+            document.getElementById('btn-grid-9').classList.toggle('active', currentGridMode === '3x3');
+
             renderAll();
         }
 
         function updateUndoButtons() {
-            const hasUndo = undoStack.length > 0;
-            const displayStyle = hasUndo ? 'inline-flex' : 'none';
-            ['btn-undo-header', 'btn-undo-photo', 'btn-undo-tags', 'btn-undo-docs'].forEach(id => {
-                const btn = document.getElementById(id);
-                if (btn) btn.style.display = displayStyle;
-            });
+            // 個別區塊專屬復原按鈕狀態更新
+            const btnHeader = document.getElementById('btn-undo-header');
+            if (btnHeader) {
+                btnHeader.style.display = (sectionUndoState.header || undoStack.length > 0) ? 'inline-flex' : 'none';
+            }
+            const btnPhoto = document.getElementById('btn-undo-photo');
+            if (btnPhoto) {
+                btnPhoto.style.display = (sectionUndoState.photo || undoStack.length > 0) ? 'inline-flex' : 'none';
+            }
+            const btnTags = document.getElementById('btn-undo-tags');
+            if (btnTags) {
+                btnTags.style.display = (sectionUndoState.tags || undoStack.length > 0) ? 'inline-flex' : 'none';
+            }
+            const btnDocs = document.getElementById('btn-undo-docs');
+            if (btnDocs) {
+                btnDocs.style.display = (sectionUndoState.docs || undoStack.length > 0) ? 'inline-flex' : 'none';
+            }
         }
 
         // 常用詞彙清單：預設為「施工前」、「施工中」、「施工後」
@@ -2084,7 +2131,7 @@
          * 表頭項目一鍵清除 (支援復原)
          */
         function clearHeaderFields() {
-            saveSnapshot();
+            saveSnapshot('header');
             if (currentModule === 'daily') {
                 const curDay = dailyDaysData[activeDailyDayIndex];
                 curDay.docTitle = '';
@@ -2106,7 +2153,7 @@
          * 僅清空當下預覽頁面顯示的照片 (支援復原)
          */
         function clearCurrentPagePhotos() {
-            saveSnapshot();
+            saveSnapshot('photo');
             const perPage = currentGridMode === '3x2' ? 6 : 9;
             const targetPhotos = currentModule === 'daily'
                 ? dailyDaysData[activeDailyDayIndex].photos
@@ -2129,7 +2176,7 @@
          * 一鍵清空當前頁所有照片說明文字 (支援復原)
          */
         function clearCurrentPageCaptions() {
-            saveSnapshot();
+            saveSnapshot('photo');
             const perPage = currentGridMode === '3x2' ? 6 : 9;
             const targetPhotos = currentModule === 'daily'
                 ? dailyDaysData[activeDailyDayIndex].photos
@@ -2151,7 +2198,7 @@
          * 一鍵清除所有單據 (支援復原)
          */
         function clearExtraDocs() {
-            saveSnapshot();
+            saveSnapshot('docs');
             const target = currentModule === 'daily' ? dailyDaysData[activeDailyDayIndex] : acceptanceData;
             target.extraDocs = [];
             renderExtraDocsSidebarList();
@@ -2162,7 +2209,7 @@
          * 一鍵清除所有單據說明文字 (支援復原)
          */
         function clearExtraDocCaptions() {
-            saveSnapshot();
+            saveSnapshot('docs');
             const target = currentModule === 'daily' ? dailyDaysData[activeDailyDayIndex] : acceptanceData;
             if (target.extraDocs) {
                 target.extraDocs.forEach(d => { d.title = ''; });
@@ -2175,7 +2222,7 @@
          * 常用詞彙一鍵清除 (支援復原)
          */
         function clearAllTags() {
-            saveSnapshot();
+            saveSnapshot('tags');
             quickTags = [];
             renderTags();
         }
@@ -2361,6 +2408,7 @@
                 e.preventDefault();
                 dz.classList.remove('dragover');
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    saveSnapshot('docs');
                     await processIncomingDocFiles(e.dataTransfer.files);
                 }
             };
@@ -2373,15 +2421,16 @@
 
         async function handleExtraDocsSelect(event) {
             if (event.target.files && event.target.files.length > 0) {
+                saveSnapshot('docs');
                 await processIncomingDocFiles(event.target.files);
                 event.target.value = '';
             }
         }
 
         function changeDocsPerPage(val) {
-            saveSnapshot();
+            saveSnapshot('docs');
             const target = currentModule === 'daily' ? dailyDaysData[activeDailyDayIndex] : acceptanceData;
-            target.docsPerPage = parseInt(val, 10);
+            target.docsPerPage = parseInt(val, 10) || 1;
             renderPreviewPages();
         }
 
@@ -2391,18 +2440,18 @@
             container.innerHTML = '';
 
             const target = currentModule === 'daily' ? dailyDaysData[activeDailyDayIndex] : acceptanceData;
-            const list = target.extraDocs || [];
+            const extraDocs = target.extraDocs || [];
 
-            list.forEach((doc, idx) => {
+            extraDocs.forEach((doc, idx) => {
                 const card = document.createElement('div');
                 card.className = 'doc-item-card';
                 card.innerHTML = `
                     <img src="${doc.src}" class="doc-item-thumb">
                     <div class="doc-item-info">
-                        <input type="text" class="input-text" placeholder="單據說明 (留空則無)" value="${escapeHtml(doc.title || '')}" oninput="updateDocItemTitle(${idx}, this.value)">
+                        <input type="text" class="input-text" placeholder="說明文字 (預設空白)" value="${escapeHtml(doc.title || '')}" oninput="updateDocItemTitle(${idx}, this.value)">
                     </div>
                     <div class="doc-item-actions">
-                        <i class="fa-solid fa-trash-can tag-del-btn" title="刪除單據" onclick="deleteDocItem(${idx})"></i>
+                        <i class="fa-solid fa-trash-can tag-del-btn" style="font-size:14px;" title="刪除此單據" onclick="deleteDocItem(${idx})"></i>
                     </div>
                 `;
                 container.appendChild(card);
