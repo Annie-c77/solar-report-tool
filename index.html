@@ -502,6 +502,18 @@
             color: #000000;
         }
 
+        /* 續頁 (第 2 頁及後續頁) 樣式：上下左右置中 */
+        .a4-page.page-continuation {
+            justify-content: center;
+            align-items: center;
+        }
+
+        .continuation-content-block {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
         /* A4 紙張內的工程表格 (黑線 1px) */
         .eng-doc-title {
             text-align: center;
@@ -592,16 +604,23 @@
             font-weight: 700;
             background-color: #ffffff;
             flex-shrink: 0;
+            width: 100%;
         }
 
         /* 照片九宮格 / 六宮格容器 */
         .photo-grid-container {
-            flex: 1;
             display: grid;
             border-left: 1.5px solid #000000;
             border-right: 1.5px solid #000000;
             border-bottom: 1.5px solid #000000;
             overflow: hidden;
+            width: 100%;
+        }
+
+        /* 固定高度：保持與第 1 頁完全一致之格子高度與比例 */
+        .photo-grid-container.grid-fixed-h {
+            height: 198mm;
+            flex: none;
         }
 
         .grid-3x2 {
@@ -694,7 +713,7 @@
             /* 嚴格保持原始長寬比，絕不拉伸 */
             object-fit: contain;
             display: block;
-            pointer-events: none; /* 避免原生圖片拖拉干擾格子自訂拖曳 */
+            pointer-events: none;
         }
 
         /* 預覽模式下的空白格提示（匯出時不印） */
@@ -1027,7 +1046,6 @@
             },
             remarks: '',
             customFields: [],
-            // 欄位勾選狀態控制
             checks: {
                 docTitle: true,
                 contractor: true,
@@ -1452,24 +1470,19 @@
 
                 for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
                     const pageElem = document.createElement('div');
-                    pageElem.className = 'a4-page';
-
-                    // 每日第一頁顯示表頭與工項明細
-                    if (pageIdx === 0) {
-                        pageElem.innerHTML += buildDailyHeaderHtml(curDay);
-                        pageElem.innerHTML += buildDailyWorkItemsHtml(curDay.workItems);
-                    }
+                    const isContinuation = (pageIdx > 0);
+                    pageElem.className = `a4-page ${isContinuation ? 'page-continuation' : ''}`;
 
                     // 照片橫幅列（不顯示「自動維持長寬比」或格數字樣）
-                    pageElem.innerHTML += `
+                    const bannerHtml = `
                         <div class="photo-banner">
                             施工照片暨說明：
                         </div>
                     `;
 
-                    // 照片格線容器
+                    // 照片格線容器（固定高度，續頁保持與第 1 頁相同高度與比例）
                     const gridWrap = document.createElement('div');
-                    gridWrap.className = `photo-grid-container grid-${currentGridMode}`;
+                    gridWrap.className = `photo-grid-container grid-${currentGridMode} grid-fixed-h`;
 
                     const startIdx = pageIdx * perPage;
                     for (let slot = 0; slot < perPage; slot++) {
@@ -1478,7 +1491,21 @@
                         gridWrap.appendChild(buildPhotoCellHtml(photoItem, globalPhotoIdx, photos));
                     }
 
-                    pageElem.appendChild(gridWrap);
+                    if (pageIdx === 0) {
+                        // 每日第一頁顯示表頭與工項明細
+                        pageElem.innerHTML += buildDailyHeaderHtml(curDay);
+                        pageElem.innerHTML += buildDailyWorkItemsHtml(curDay.workItems);
+                        pageElem.innerHTML += bannerHtml;
+                        pageElem.appendChild(gridWrap);
+                    } else {
+                        // 續頁模式：整塊照片區域（橫幅 + 照片格子）包裝在 continuation-content-block 中上下左右置中
+                        const contBlock = document.createElement('div');
+                        contBlock.className = 'continuation-content-block';
+                        contBlock.innerHTML = bannerHtml;
+                        contBlock.appendChild(gridWrap);
+                        pageElem.appendChild(contBlock);
+                    }
+
                     wrapper.appendChild(pageElem);
                 }
             } else {
@@ -1488,23 +1515,19 @@
 
                 for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
                     const pageElem = document.createElement('div');
-                    pageElem.className = 'a4-page';
-
-                    // 僅第 1 頁顯示表頭
-                    if (pageIdx === 0) {
-                        pageElem.innerHTML += buildAcceptanceHeaderHtml();
-                    }
+                    const isContinuation = (pageIdx > 0);
+                    pageElem.className = `a4-page ${isContinuation ? 'page-continuation' : ''}`;
 
                     // 照片橫幅列
-                    pageElem.innerHTML += `
+                    const bannerHtml = `
                         <div class="photo-banner">
                             施工照片暨說明：
                         </div>
                     `;
 
-                    // 照片格線容器
+                    // 照片格線容器（固定高度，續頁保持與第 1 頁相同高度與比例）
                     const gridWrap = document.createElement('div');
-                    gridWrap.className = `photo-grid-container grid-${currentGridMode}`;
+                    gridWrap.className = `photo-grid-container grid-${currentGridMode} grid-fixed-h`;
 
                     const startIdx = pageIdx * perPage;
                     for (let slot = 0; slot < perPage; slot++) {
@@ -1513,7 +1536,20 @@
                         gridWrap.appendChild(buildPhotoCellHtml(photoItem, globalPhotoIdx, photos));
                     }
 
-                    pageElem.appendChild(gridWrap);
+                    if (pageIdx === 0) {
+                        // 僅第 1 頁顯示表頭
+                        pageElem.innerHTML += buildAcceptanceHeaderHtml();
+                        pageElem.innerHTML += bannerHtml;
+                        pageElem.appendChild(gridWrap);
+                    } else {
+                        // 續頁模式：整塊照片區域（橫幅 + 照片格子）包裝在 continuation-content-block 中上下左右置中
+                        const contBlock = document.createElement('div');
+                        contBlock.className = 'continuation-content-block';
+                        contBlock.innerHTML = bannerHtml;
+                        contBlock.appendChild(gridWrap);
+                        pageElem.appendChild(contBlock);
+                    }
+
                     wrapper.appendChild(pageElem);
                 }
             }
@@ -1759,7 +1795,6 @@
 
             // --- 拖曳排序事件 (照片與照片之間互換位置) ---
             cell.ondragstart = (e) => {
-                // 如果是從外部拖檔案進來，則不觸發內部排序
                 if (!photoItem.src) {
                     e.preventDefault();
                     return;
@@ -1815,7 +1850,6 @@
 
             // 單格點擊上傳更換照片
             imgWrap.onclick = (e) => {
-                // 若剛剛是拖曳動作則不觸發檔案選擇
                 if (cell.classList.contains('dragging')) return;
                 pendingUploadSlotIndex = index;
                 document.getElementById('single-file-input').click();
@@ -1830,7 +1864,6 @@
             captionInput.className = 'photo-caption-input';
             captionInput.value = photoItem.caption || '';
             captionInput.placeholder = '輸入照片說明...';
-            // 防止點擊輸入說明文字時意外觸發拖曳
             captionInput.onmousedown = (e) => e.stopPropagation();
             captionInput.onfocus = () => { lastFocusedCaptionIndex = index; };
             captionInput.oninput = (e) => {
@@ -1861,7 +1894,15 @@
         function handleBatchFileSelect(event) {
             const files = event.target.files;
             if (files && files.length > 0) {
-                insertFilesStartingAt(files, 0);
+                const targetPhotos = currentModule === 'daily'
+                    ? dailyDaysData[activeDailyDayIndex].photos
+                    : acceptanceData.photos;
+                
+                let firstEmptyIdx = targetPhotos.findIndex(p => !p.src);
+                if (firstEmptyIdx === -1) {
+                    firstEmptyIdx = targetPhotos.length;
+                }
+                insertFilesStartingAt(files, firstEmptyIdx);
             }
             event.target.value = '';
         }
@@ -1880,16 +1921,20 @@
                 ? dailyDaysData[activeDailyDayIndex].photos
                 : acceptanceData.photos;
 
-            let loadedCount = 0;
             const filesArr = Array.from(fileList);
+            const totalRequiredCount = startIndex + filesArr.length;
 
+            ensurePhotoListLength(targetPhotos, totalRequiredCount - 1);
+
+            let loadedCount = 0;
             filesArr.forEach((file, idx) => {
                 const targetIdx = startIndex + idx;
-                ensurePhotoListLength(targetPhotos, targetIdx);
-
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     targetPhotos[targetIdx].src = e.target.result;
+                    if (!targetPhotos[targetIdx].caption) {
+                        targetPhotos[targetIdx].caption = currentModule === 'daily' ? '說明:' : '';
+                    }
                     loadedCount++;
                     if (loadedCount === filesArr.length) {
                         renderPreviewPages();
@@ -1908,16 +1953,27 @@
                 e.preventDefault();
                 dz.classList.remove('dragover');
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    insertFilesStartingAt(e.dataTransfer.files, 0);
+                    const targetPhotos = currentModule === 'daily'
+                        ? dailyDaysData[activeDailyDayIndex].photos
+                        : acceptanceData.photos;
+                    let firstEmptyIdx = targetPhotos.findIndex(p => !p.src);
+                    if (firstEmptyIdx === -1) firstEmptyIdx = targetPhotos.length;
+                    insertFilesStartingAt(e.dataTransfer.files, firstEmptyIdx);
                 }
             };
         }
 
         function clearCurrentPhotos() {
+            const perPage = currentGridMode === '3x2' ? 6 : 9;
+            const defaultList = [];
+            for (let i = 0; i < perPage; i++) {
+                defaultList.push({ src: '', caption: currentModule === 'daily' ? '說明:' : '' });
+            }
+
             if (currentModule === 'daily') {
-                dailyDaysData[activeDailyDayIndex].photos.forEach(p => p.src = '');
+                dailyDaysData[activeDailyDayIndex].photos = defaultList;
             } else {
-                acceptanceData.photos.forEach(p => p.src = '');
+                acceptanceData.photos = defaultList;
             }
             renderPreviewPages();
         }
@@ -2004,9 +2060,7 @@
                     <span>${escapeHtml(tag)}</span>
                     <i class="fa-solid fa-xmark tag-del-btn" title="刪除此詞彙"></i>
                 `;
-                // 點擊詞彙代入焦點
                 tagElem.querySelector('span').onclick = () => applyTagToCaption(tag);
-                // 點擊 × 刪除
                 tagElem.querySelector('.tag-del-btn').onclick = (e) => {
                     e.stopPropagation();
                     quickTags.splice(idx, 1);
@@ -2040,7 +2094,7 @@
 
         /**
          * 原生 Canvas 高解析度向量級 PDF 產出引擎
-         * 徹底保證：標楷體、文字幾何垂直置中、照片保持長寬比、空白照片格完全留白
+         * 徹底保證：標楷體、文字幾何垂直置中、照片保持長寬比、續頁上下左右完全置中
          */
         async function exportToPdfCanvas() {
             const overlay = document.getElementById('loading-overlay');
@@ -2088,7 +2142,6 @@
                     const pageMeta = pagesToExport[i];
 
                     const canvas = document.createElement('canvas');
-                    // 300 DPI A4 像素解析度
                     canvas.width = 2480;
                     canvas.height = 3508;
                     const ctx = canvas.getContext('2d');
@@ -2132,130 +2185,140 @@
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 3;
 
-            // 1. 繪製表頭 (施工日誌每天第1頁，或驗收報告整份第1頁)
-            if (meta.module === 'daily' && meta.isFirstPageOfDay) {
-                // (a) 標題
-                ctx.font = `bold 64px ${FONT_KAI}`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('施工日誌', cW / 2, curY + 36);
-                curY += 80;
+            const isContinuation = (meta.module === 'daily' && !meta.isFirstPageOfDay) || 
+                                   (meta.module === 'accept' && !meta.isFirstPageOfDoc);
 
-                // (b) 表頭資料表格
-                const rowH = 70;
-                const day = meta.dayData;
-                const rowsData = [
-                    [
-                        { txt: '案場名稱', w: 0.18, isHeader: true },
-                        { txt: day.siteName, w: 0.32, isHeader: false, align: 'left' },
-                        { txt: '施工日期:', w: 0.18, isHeader: true },
-                        { txt: formatDateText(day.dateObj), w: 0.32, isHeader: false, align: 'left' }
-                    ],
-                    [
-                        { txt: '案場地址', w: 0.18, isHeader: true },
-                        { txt: day.siteAddress, w: 0.82, isHeader: false, align: 'left', colspan: 3 }
-                    ]
-                ];
+            // 照片九宮格 / 六宮格標準高度設定
+            const bannerH = 65;
+            const gridH = 2338; // 約 198mm 在 300 DPI 下之高度
+            const totalBlockH = bannerH + gridH;
 
-                // 加上自訂欄位
-                day.customFields.forEach(cf => {
-                    if (cf.checked) {
-                        rowsData.push([
-                            { txt: cf.label, w: 0.18, isHeader: true },
-                            { txt: cf.value || '', w: 0.82, isHeader: false, align: 'left', colspan: 3 }
-                        ]);
-                    }
-                });
-
-                curY = drawCanvasTable(ctx, marginX, curY, contentW, rowH, rowsData, FONT_KAI, 32);
-
-                // (c) 施工項目明細表格
-                const itemRowH = 65;
-                const itemHeader = [
-                    { txt: '施工項目', w: 0.32, isHeader: true },
-                    { txt: '施工人數', w: 0.10, isHeader: true },
-                    { txt: '使用機具', w: 0.12, isHeader: true },
-                    { txt: '機具數量\n作業時間', w: 0.12, isHeader: true },
-                    { txt: '材料名稱', w: 0.22, isHeader: true },
-                    { txt: '材料數量', w: 0.12, isHeader: true }
-                ];
-                const itemRows = [itemHeader];
-                day.workItems.forEach(wi => {
-                    itemRows.push([
-                        { txt: wi.item, w: 0.32 },
-                        { txt: wi.workers, w: 0.10 },
-                        { txt: wi.tool, w: 0.12 },
-                        { txt: wi.duration, w: 0.12 },
-                        { txt: wi.material, w: 0.22 },
-                        { txt: wi.qty, w: 0.12 }
-                    ]);
-                });
-
-                curY = drawCanvasTable(ctx, marginX, curY - 3, contentW, itemRowH, itemRows, FONT_KAI, 28);
-                curY += 6;
-            } else if (meta.module === 'accept' && meta.isFirstPageOfDoc) {
-                // 工程驗收報告第一頁
-                const dat = meta.data;
-                const ch = dat.checks;
-
-                if (ch.docTitle) {
+            if (isContinuation) {
+                // 續頁模式：整塊照片區域（橫幅 + 照片格子）在 A4 畫布高度中上下完全垂直置中
+                curY = (cH - totalBlockH) / 2;
+            } else {
+                // 1. 繪製首頁表頭
+                if (meta.module === 'daily' && meta.isFirstPageOfDay) {
+                    // (a) 標題
                     ctx.font = `bold 64px ${FONT_KAI}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(dat.docTitle, cW / 2, curY + 36);
+                    ctx.fillText('施工日誌', cW / 2, curY + 36);
                     curY += 80;
-                }
 
-                const rowH = 70;
-                const rowsData = [];
+                    // (b) 表頭資料表格
+                    const rowH = 70;
+                    const day = meta.dayData;
+                    const rowsData = [
+                        [
+                            { txt: '案場名稱', w: 0.18, isHeader: true },
+                            { txt: day.siteName, w: 0.32, isHeader: false, align: 'left' },
+                            { txt: '施工日期:', w: 0.18, isHeader: true },
+                            { txt: formatDateText(day.dateObj), w: 0.32, isHeader: false, align: 'left' }
+                        ],
+                        [
+                            { txt: '案場地址', w: 0.18, isHeader: true },
+                            { txt: day.siteAddress, w: 0.82, isHeader: false, align: 'left', colspan: 3 }
+                        ]
+                    ];
 
-                if (ch.contractor && ch.acceptDate) {
-                    rowsData.push([
-                        { txt: '維運/施工廠商:', w: 0.20, isHeader: true },
-                        { txt: dat.contractor, w: 0.35, isHeader: false, align: 'left' },
-                        { txt: '驗收日:', w: 0.15, isHeader: true },
-                        { txt: formatDateText(dat.acceptDate), w: 0.30, isHeader: false, align: 'left' }
-                    ]);
-                } else if (ch.contractor) {
-                    rowsData.push([
-                        { txt: '維運/施工廠商:', w: 0.20, isHeader: true },
-                        { txt: dat.contractor, w: 0.80, isHeader: false, align: 'left', colspan: 3 }
-                    ]);
-                }
+                    day.customFields.forEach(cf => {
+                        if (cf.checked) {
+                            rowsData.push([
+                                { txt: cf.label, w: 0.18, isHeader: true },
+                                { txt: cf.value || '', w: 0.82, isHeader: false, align: 'left', colspan: 3 }
+                            ]);
+                        }
+                    });
 
-                if (ch.siteCapacity && ch.periodDate) {
-                    rowsData.push([
-                        { txt: '案場/容量:', w: 0.20, isHeader: true },
-                        { txt: dat.siteCapacity, w: 0.35, isHeader: false, align: 'left' },
-                        { txt: '起訖日:', w: 0.15, isHeader: true },
-                        { txt: formatDateRangeText(dat.periodDate), w: 0.30, isHeader: false, align: 'left' }
-                    ]);
-                }
+                    curY = drawCanvasTable(ctx, marginX, curY, contentW, rowH, rowsData, FONT_KAI, 32);
 
-                if (ch.remarks) {
-                    rowsData.push([
-                        { txt: '備註:', w: 0.20, isHeader: true },
-                        { txt: dat.remarks || '', w: 0.80, isHeader: false, align: 'left', colspan: 3 }
-                    ]);
-                }
+                    // (c) 施工項目明細表格
+                    const itemRowH = 65;
+                    const itemHeader = [
+                        { txt: '施工項目', w: 0.32, isHeader: true },
+                        { txt: '施工人數', w: 0.10, isHeader: true },
+                        { txt: '使用機具', w: 0.12, isHeader: true },
+                        { txt: '機具數量\n作業時間', w: 0.12, isHeader: true },
+                        { txt: '材料名稱', w: 0.22, isHeader: true },
+                        { txt: '材料數量', w: 0.12, isHeader: true }
+                    ];
+                    const itemRows = [itemHeader];
+                    day.workItems.forEach(wi => {
+                        itemRows.push([
+                            { txt: wi.item, w: 0.32 },
+                            { txt: wi.workers, w: 0.10 },
+                            { txt: wi.tool, w: 0.12 },
+                            { txt: wi.duration, w: 0.12 },
+                            { txt: wi.material, w: 0.22 },
+                            { txt: wi.qty, w: 0.12 }
+                        ]);
+                    });
 
-                dat.customFields.forEach(cf => {
-                    if (cf.checked) {
+                    curY = drawCanvasTable(ctx, marginX, curY - 3, contentW, itemRowH, itemRows, FONT_KAI, 28);
+                    curY += 6;
+                } else if (meta.module === 'accept' && meta.isFirstPageOfDoc) {
+                    const dat = meta.data;
+                    const ch = dat.checks;
+
+                    if (ch.docTitle) {
+                        ctx.font = `bold 64px ${FONT_KAI}`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(dat.docTitle, cW / 2, curY + 36);
+                        curY += 80;
+                    }
+
+                    const rowH = 70;
+                    const rowsData = [];
+
+                    if (ch.contractor && ch.acceptDate) {
                         rowsData.push([
-                            { txt: cf.label + ':', w: 0.20, isHeader: true },
-                            { txt: cf.value || '', w: 0.80, isHeader: false, align: 'left', colspan: 3 }
+                            { txt: '維運/施工廠商:', w: 0.20, isHeader: true },
+                            { txt: dat.contractor, w: 0.35, isHeader: false, align: 'left' },
+                            { txt: '驗收日:', w: 0.15, isHeader: true },
+                            { txt: formatDateText(dat.acceptDate), w: 0.30, isHeader: false, align: 'left' }
+                        ]);
+                    } else if (ch.contractor) {
+                        rowsData.push([
+                            { txt: '維運/施工廠商:', w: 0.20, isHeader: true },
+                            { txt: dat.contractor, w: 0.80, isHeader: false, align: 'left', colspan: 3 }
                         ]);
                     }
-                });
 
-                if (rowsData.length > 0) {
-                    curY = drawCanvasTable(ctx, marginX, curY, contentW, rowH, rowsData, FONT_KAI, 32);
-                    curY += 6;
+                    if (ch.siteCapacity && ch.periodDate) {
+                        rowsData.push([
+                            { txt: '案場/容量:', w: 0.20, isHeader: true },
+                            { txt: dat.siteCapacity, w: 0.35, isHeader: false, align: 'left' },
+                            { txt: '起訖日:', w: 0.15, isHeader: true },
+                            { txt: formatDateRangeText(dat.periodDate), w: 0.30, isHeader: false, align: 'left' }
+                        ]);
+                    }
+
+                    if (ch.remarks) {
+                        rowsData.push([
+                            { txt: '備註:', w: 0.20, isHeader: true },
+                            { txt: dat.remarks || '', w: 0.80, isHeader: false, align: 'left', colspan: 3 }
+                        ]);
+                    }
+
+                    dat.customFields.forEach(cf => {
+                        if (cf.checked) {
+                            rowsData.push([
+                                { txt: cf.label + ':', w: 0.20, isHeader: true },
+                                { txt: cf.value || '', w: 0.80, isHeader: false, align: 'left', colspan: 3 }
+                            ]);
+                        }
+                    });
+
+                    if (rowsData.length > 0) {
+                        curY = drawCanvasTable(ctx, marginX, curY, contentW, rowH, rowsData, FONT_KAI, 32);
+                        curY += 6;
+                    }
                 }
             }
 
-            // 2. 照片橫幅標題（乾淨純留白，絕不顯示格數與長寬比說明）
-            const bannerH = 65;
+            // 2. 照片橫幅標題
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(marginX, curY, contentW, bannerH);
             ctx.strokeRect(marginX, curY, contentW, bannerH);
@@ -2268,12 +2331,11 @@
             curY += bannerH;
 
             // 3. 照片九宮格 / 六宮格繪製
-            const gridH = (cH - marginY) - curY;
             const cols = currentGridMode === '3x2' ? 2 : 3;
             const rows = 3;
             const colW = contentW / cols;
             const rowH = gridH / rows;
-            const captionH = 55; // 照片下方說明列高度
+            const captionH = 55;
 
             const photosToDraw = meta.photos;
 
@@ -2299,7 +2361,7 @@
                         ctx.fillText(photo.caption, cellX + 14, capY + captionH / 2);
                     }
 
-                    // 繪製照片（若有上傳）；若為空白格則「完全純白留空」，絕不繪製任何字樣
+                    // 繪製照片（若有上傳）；空白格完全純白留空
                     if (photo && photo.src) {
                         try {
                             const img = await loadImageAsync(photo.src);
@@ -2308,7 +2370,6 @@
                             const areaX = cellX + 8;
                             const areaY = cellY + 8;
 
-                            // 嚴格維持長寬比 (object-fit: contain)
                             const hRatio = imgAreaW / img.width;
                             const vRatio = imgAreaH / img.height;
                             const ratio = Math.min(hRatio, vRatio);
